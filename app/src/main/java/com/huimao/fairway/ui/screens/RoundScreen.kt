@@ -269,8 +269,8 @@ fun RoundScreen(
                         DistanceRow("第 ${idx + 1} 杆", formatMeters(d))
                         prev = shot
                     }
-                    if (location != null) {
-                        val loc = location
+                    val loc = location
+                    if (loc != null) {
                         DistanceRow("正在打的这杆", formatMeters(prev?.let { Geo.haversineMeters(it, loc) }))
                     }
                     OutlinedButton(
