@@ -12,7 +12,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -20,18 +23,37 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.huimao.fairway.data.compassText
+import com.huimao.fairway.data.weatherCodeText
 import com.huimao.fairway.domain.Geo
+import com.huimao.fairway.domain.LatLng
 import com.huimao.fairway.ui.RoundViewModel
 import com.huimao.fairway.ui.components.CourseMapView
+import com.huimao.fairway.ui.teeName
 import kotlin.math.roundToInt
 
 private fun formatMeters(d: Double?): String =
     if (d == null) "—" else "${d.roundToInt()} 米"
+
+private val TEE_ORDER = listOf("black", "blue", "white", "red")
+
+/** 风相对当前洞方向：顺风 / 逆风 / 侧风（风向是“风从哪来”的气象 convention）。 */
+private fun windHint(windFromDeg: Double, holeBearingDeg: Double): String {
+    val towards = (windFromDeg + 180.0) % 360.0
+    val diff = ((towards - holeBearingDeg + 540.0) % 360.0) - 180.0
+    return when {
+        kotlin.math.abs(diff) < 45.0 -> "顺风"
+        kotlin.math.abs(diff) > 135.0 -> "逆风"
+        else -> "侧风"
+    }
+}
 
 @Composable
 fun RoundScreen(
@@ -41,12 +63,22 @@ fun RoundScreen(
     modifier: Modifier = Modifier,
 ) {
     val course by viewModel.course.collectAsStateWithLifecycle()
+    val packs by viewModel.packs.collectAsStateWithLifecycle()
+    val selectedPack by viewModel.selectedPack.collectAsStateWithLifecycle()
+    val selectedTee by viewModel.selectedTee.collectAsStateWithLifecycle()
     val loadError by viewModel.loadError.collectAsStateWithLifecycle()
     val currentHole by viewModel.currentHole.collectAsStateWithLifecycle()
     val location by viewModel.location.collectAsStateWithLifecycle()
     val shotOrigin by viewModel.shotOrigin.collectAsStateWithLifecycle()
+    val shotsMap by viewModel.shots.collectAsStateWithLifecycle()
+    val weather by viewModel.weather.collectAsStateWithLifecycle()
 
     val hole = course?.holes?.find { it.ref == currentHole }
+    val availableTees = remember(course) {
+        course?.holes?.flatMap { it.tees.keys }?.distinct()
+            ?.sortedBy { TEE_ORDER.indexOf(it) }.orEmpty()
+    }
+    val holeShots = shotsMap[currentHole].orEmpty()
     val greenDist = remember(location, hole) {
         val loc = location
         val g = hole?.green
@@ -65,6 +97,24 @@ fun RoundScreen(
         val origin = shotOrigin
         if (loc != null && origin != null) Geo.haversineMeters(origin, loc) else null
     }
+    // 果岭读线：离洞口 100 米内，画球到洞口的推杆线（OSM 无果岭坡度数据，线为直线参考）
+    val puttLine: Pair<LatLng, LatLng>? = remember(location, hole) {
+        val loc = location
+        val g = hole?.green
+        if (loc != null && g != null && Geo.haversineMeters(loc, g.center) <= 100.0) {
+            loc to g.center
+        } else {
+            null
+        }
+    }
+    // 风向相对当前洞：从所选发球台到果岭的方向
+    val holeBearing = remember(hole, selectedTee) {
+        val tee = hole?.tees?.get(selectedTee) ?: hole?.poly?.firstOrNull()
+        val g = hole?.green
+        if (tee != null && g != null) Geo.bearing(tee, g.center) else null
+    }
+
+    var courseMenuExpanded by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -77,6 +127,46 @@ fun RoundScreen(
             loadError ?: course?.name ?: "加载球场…",
             style = MaterialTheme.typography.titleLarge,
         )
+
+        // 多球场切换（只有一个球场时也是入口，以后加球场不用改界面）
+        if (packs.size > 1) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedButton(onClick = { courseMenuExpanded = true }) {
+                    Text(course?.name ?: "选择球场")
+                }
+                DropdownMenu(
+                    expanded = courseMenuExpanded,
+                    onDismissRequest = { courseMenuExpanded = false },
+                ) {
+                    packs.forEach { pack ->
+                        DropdownMenuItem(
+                            text = { Text(pack.courseName) },
+                            onClick = {
+                                courseMenuExpanded = false
+                                if (pack.fileName != selectedPack) viewModel.selectPack(pack.fileName)
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
+        // 发球台选择（WHS rating/slope 按这个台算）
+        if (availableTees.isNotEmpty()) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("发球台", style = MaterialTheme.typography.bodyMedium)
+                availableTees.forEach { color ->
+                    FilterChip(
+                        selected = selectedTee == color,
+                        onClick = { viewModel.setSelectedTee(color) },
+                        label = { Text("${teeName(color)} T") },
+                    )
+                }
+            }
+        }
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -111,6 +201,23 @@ fun RoundScreen(
             }
         }
 
+        // 天气（Open-Meteo；取不到就不显示）
+        weather?.let { w ->
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("天气", style = MaterialTheme.typography.titleMedium)
+                    DistanceRow("天气", weatherCodeText(w.weatherCode))
+                    DistanceRow("气温", "${w.temperature.roundToInt()}°C")
+                    val windText = "${compassText(w.windDirection)}风 ${w.windSpeed.roundToInt()} 米/秒" +
+                        (holeBearing?.let { " · ${windHint(w.windDirection, it)}" } ?: "")
+                    DistanceRow("风", windText)
+                }
+            }
+        }
+
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
             Column(
                 Modifier.padding(16.dp),
@@ -125,6 +232,52 @@ fun RoundScreen(
                 DistanceRow("上一杆", formatMeters(lastShot))
                 if (location == null && locationGranted) {
                     Text("正在定位…", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+
+        // 果岭读线：离洞口近时显示推杆线（直线参考，OSM 无坡度数据）
+        puttLine?.let { (_, center) ->
+            val puttDist = location?.let { Geo.haversineMeters(it, center) }
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("果岭读线", style = MaterialTheme.typography.titleMedium)
+                    DistanceRow("到洞口", formatMeters(puttDist))
+                    Text(
+                        "推杆线已在地图上标出（绿色虚线）。果岭坡度数据暂无，线为直线参考，实际 break 需现场判断。",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        }
+
+        // 击球轨迹：本洞每杆距离
+        if (holeShots.isNotEmpty()) {
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("击球轨迹 · 第 $currentHole 洞", style = MaterialTheme.typography.titleMedium)
+                    val teePoint = hole?.tees?.get(selectedTee) ?: hole?.poly?.firstOrNull()
+                    var prev = teePoint
+                    holeShots.forEachIndexed { idx, shot ->
+                        val d = prev?.let { Geo.haversineMeters(it, shot) }
+                        DistanceRow("第 ${idx + 1} 杆", formatMeters(d))
+                        prev = shot
+                    }
+                    if (location != null) {
+                        DistanceRow("正在打的这杆", formatMeters(prev?.let { Geo.haversineMeters(it, location) }))
+                    }
+                    OutlinedButton(
+                        onClick = { viewModel.undoShot() },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("撤销上一杆")
+                    }
                 }
             }
         }
@@ -155,6 +308,8 @@ fun RoundScreen(
                 bunkers = course?.bunkers.orEmpty(),
                 waterHazards = course?.waterHazards.orEmpty(),
                 playerLocation = location,
+                shots = holeShots,
+                puttLine = puttLine,
             )
         }
     }

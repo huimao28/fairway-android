@@ -25,11 +25,27 @@ data class HoleScore(
 )
 
 @Serializable
+data class HoleShot(
+    val hole: Int,
+    val lat: Double,
+    val lon: Double,
+)
+
+@Serializable
 data class RoundRecord(
     val id: Long,
     val courseName: String,
     val dateEpochMs: Long,
     val scores: List<HoleScore>,
+    /** 打球时选的发球台颜色（black/blue/white/red） */
+    val tee: String? = null,
+    /** 保存时该发球台的 rating/slope 快照（WHS 微分用） */
+    val rating: Double? = null,
+    val slope: Int? = null,
+    /** WHS 差点微分（保存时算好；老记录为 null） */
+    val differential: Double? = null,
+    /** 击球轨迹：每洞的击球点（按顺序） */
+    val shots: List<HoleShot> = emptyList(),
 )
 
 private val Context.roundsDataStore: DataStore<Preferences> by preferencesDataStore(name = "rounds")

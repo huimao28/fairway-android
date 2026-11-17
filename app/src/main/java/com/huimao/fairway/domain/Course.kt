@@ -1,6 +1,7 @@
 package com.huimao.fairway.domain
 
 import com.huimao.fairway.data.CoursePack
+import com.huimao.fairway.data.TeeRating
 
 /** 经纬度点（不直接用 android.location 的类，领域层保持纯 Kotlin，方便单元测试）。 */
 data class LatLng(val lat: Double, val lon: Double)
@@ -29,6 +30,8 @@ data class Course(
     val holes: List<Hole>,
     val bunkers: List<LatLng>,
     val waterHazards: List<LatLng>,
+    /** 发球台颜色 -> rating/slope（WHS 用；空表示该球场未提供） */
+    val ratings: Map<String, TeeRating> = emptyMap(),
 )
 
 /** CoursePack（原始 JSON）-> Course（领域模型）。 */
@@ -73,5 +76,6 @@ fun CoursePack.toCourse(): Course {
         holes = resolvedHoles,
         bunkers = bunkers.map { LatLng(it.lat, it.lon) },
         waterHazards = water_hazards.map { LatLng(it.lat, it.lon) },
+        ratings = course.ratings.associateBy { it.color },
     )
 }

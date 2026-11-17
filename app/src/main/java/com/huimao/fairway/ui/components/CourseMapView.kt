@@ -45,6 +45,8 @@ private const val SRC_TEE = "tee-src"
 private const val SRC_BUNKER = "bunker-src"
 private const val SRC_WATER = "water-src"
 private const val SRC_PLAYER = "player-src"
+private const val SRC_SHOTS = "shots-src"
+private const val SRC_PUTT = "putt-src"
 
 private fun teeColorHex(color: String): String = when (color) {
     "black" -> "#000000"
@@ -65,6 +67,8 @@ fun CourseMapView(
     bunkers: List<LatLng>,
     waterHazards: List<LatLng>,
     playerLocation: LatLng?,
+    shots: List<LatLng> = emptyList(),
+    puttLine: Pair<LatLng, LatLng>? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -127,6 +131,15 @@ fun CourseMapView(
         }
     }
 
+    // 击球轨迹 / 推杆线变化 → 只更新这两个图层
+    LaunchedEffect(shots, puttLine, styleLoaded) {
+        val m = map ?: return@LaunchedEffect
+        if (!styleLoaded) return@LaunchedEffect
+        m.getStyle { style ->
+            updateShotLayers(style, shots, puttLine)
+        }
+    }
+
     AndroidView(
         factory = {
             mapView.apply {
@@ -158,6 +171,8 @@ private fun addHoleLayers(style: Style) {
     style.addSource(GeoJsonSource(SRC_BUNKER))
     style.addSource(GeoJsonSource(SRC_WATER))
     style.addSource(GeoJsonSource(SRC_PLAYER))
+    style.addSource(GeoJsonSource(SRC_SHOTS))
+    style.addSource(GeoJsonSource(SRC_PUTT))
 
     // 图层按加入顺序叠放：果岭底 → 洞线 → 沙坑/水障 → Tee → 玩家
     style.addLayer(
@@ -199,6 +214,32 @@ private fun addHoleLayers(style: Style) {
             PropertyFactory.circleColor(Expression.toColor(Expression.get("color"))),
             PropertyFactory.circleStrokeWidth(2f),
             PropertyFactory.circleStrokeColor("#FFFFFF"),
+        ),
+    )
+    // 击球轨迹：蓝线 + 白点（蓝边）
+    style.addLayer(
+        LineLayer("shot-trace", SRC_SHOTS).withProperties(
+            PropertyFactory.lineColor("#1565C0"),
+            PropertyFactory.lineWidth(3f),
+            PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+            PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+        ),
+    )
+    style.addLayer(
+        CircleLayer("shot-points", SRC_SHOTS).withProperties(
+            PropertyFactory.circleRadius(6f),
+            PropertyFactory.circleColor("#FFFFFF"),
+            PropertyFactory.circleStrokeWidth(2f),
+            PropertyFactory.circleStrokeColor("#1565C0"),
+        ),
+    )
+    // 推杆线：绿色虚线（球 -> 洞口）
+    style.addLayer(
+        LineLayer("putt-line", SRC_PUTT).withProperties(
+            PropertyFactory.lineColor("#43A047"),
+            PropertyFactory.lineWidth(3f),
+            PropertyFactory.lineDasharray(floatArrayOf(4f, 3f)),
+            PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
         ),
     )
     style.addLayer(
@@ -269,6 +310,45 @@ private fun updateHoleLayers(
     style.getSourceAs<GeoJsonSource>(SRC_WATER)?.setGeoJson(
         FeatureCollection.fromFeatures(
             waterHazards.map { Feature.fromGeometry(Point.fromLngLat(it.lon, it.lat)) },
+        ),
+    )
+}
+
+/** 击球轨迹与推杆线：同一 source 里混放折线与点，LineLayer 只画线、CircleLayer 只画点。 */
+private fun updateShotLayers(
+    style: Style,
+    shots: List<LatLng>,
+    puttLine: Pair<LatLng, LatLng>?,
+) {
+    style.getSourceAs<GeoJsonSource>(SRC_SHOTS)?.setGeoJson(
+        FeatureCollection.fromFeatures(
+            buildList {
+                if (shots.size >= 2) {
+                    add(
+                        Feature.fromGeometry(
+                            LineString.fromLngLats(shots.map { Point.fromLngLat(it.lon, it.lat) }),
+                        ),
+                    )
+                }
+                shots.forEach { p ->
+                    add(Feature.fromGeometry(Point.fromLngLat(p.lon, p.lat)))
+                }
+            },
+        ),
+    )
+    style.getSourceAs<GeoJsonSource>(SRC_PUTT)?.setGeoJson(
+        FeatureCollection.fromFeatures(
+            if (puttLine == null) emptyList()
+            else listOf(
+                Feature.fromGeometry(
+                    LineString.fromLngLats(
+                        listOf(
+                            Point.fromLngLat(puttLine.first.lon, puttLine.first.lat),
+                            Point.fromLngLat(puttLine.second.lon, puttLine.second.lat),
+                        ),
+                    ),
+                ),
+            ),
         ),
     )
 }

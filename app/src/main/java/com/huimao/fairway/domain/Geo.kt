@@ -1,6 +1,7 @@
 package com.huimao.fairway.domain
 
 import kotlin.math.asin
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.sin
@@ -22,6 +23,16 @@ object Geo {
     }
 
     private fun Double.pow(exp: Int): Double = Math.pow(this, exp.toDouble())
+
+    /** 从 from 到 to 的方位角（度，0 = 正北，顺时针 0–360）。 */
+    fun bearing(from: LatLng, to: LatLng): Double {
+        val lat1 = Math.toRadians(from.lat)
+        val lat2 = Math.toRadians(to.lat)
+        val dLon = Math.toRadians(to.lon - from.lon)
+        val y = sin(dLon) * cos(lat2)
+        val x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
+        return (Math.toDegrees(atan2(y, x)) + 360.0) % 360.0
+    }
 
     /**
      * 点到线段的最短距离（米）。

@@ -17,6 +17,17 @@ data class CourseInfo(
     val lon: Double,
     val total_par: Int = 0,
     val source: String = "",
+    /** 各发球台 rating/slope（WHS 用；来源见球场数据文件，如 TheGrint） */
+    val ratings: List<TeeRating> = emptyList(),
+)
+
+/** 发球台 rating/slope（WHS 差点微分用）。 */
+@Serializable
+data class TeeRating(
+    /** black | blue | white | red */
+    val color: String,
+    val rating: Double,
+    val slope: Int,
 )
 
 @Serializable

@@ -6,7 +6,14 @@
     "lat": 29.1180698,
     "lon": 111.6934026,
     "total_par": 72,
-    "source": "OpenStreetMap Overpass, 2026-11-17"
+    "source": "OpenStreetMap Overpass, 2026-11-17",
+    "ratings": [
+      { "color": "black", "rating": 74.9, "slope": 131 },
+      { "color": "blue", "rating": 73.1, "slope": 123 },
+      { "color": "white", "rating": 70.7, "slope": 121 },
+      { "color": "red", "rating": 70.2, "slope": 119 }
+    ],
+    "ratings_source": "TheGrint, 2026-11-17"
   },
   "holes": [
     {

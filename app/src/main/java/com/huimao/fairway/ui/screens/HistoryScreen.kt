@@ -29,10 +29,12 @@ import com.huimao.fairway.data.HoleScore
 import com.huimao.fairway.data.RoundRecord
 import com.huimao.fairway.domain.Hole
 import com.huimao.fairway.domain.Scoring
+import com.huimao.fairway.domain.Whs
 import com.huimao.fairway.ui.RoundViewModel
 import com.huimao.fairway.ui.components.Stepper
 import com.huimao.fairway.ui.components.TriStateChip
 import com.huimao.fairway.ui.components.cycle
+import com.huimao.fairway.ui.teeName
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -44,6 +46,7 @@ fun HistoryScreen(
 ) {
     val rounds by viewModel.rounds.collectAsStateWithLifecycle()
     val course by viewModel.course.collectAsStateWithLifecycle()
+    val selectedTee by viewModel.selectedTee.collectAsStateWithLifecycle()
     val holes = course?.holes.orEmpty()
     val coursePar = course?.totalPar ?: 72
     val handicap = Scoring.simplifiedHandicap(rounds, coursePar)
@@ -51,6 +54,16 @@ fun HistoryScreen(
     val avgPutts = Scoring.avgPutts(allScores)
     val girRate = Scoring.girRate(allScores)
     val firRate = Scoring.firRate(allScores)
+    // WHS 差点指数：由已存微分（按时间升序）算；球场差点按当前球场 + 所选发球台的 rating/slope
+    val whsIndex = Whs.handicapIndex(
+        rounds.sortedBy { it.dateEpochMs }.mapNotNull { it.differential },
+    )
+    val teeRating = course?.ratings?.get(selectedTee)
+    val courseHandicap = if (whsIndex != null && teeRating != null) {
+        Whs.courseHandicap(whsIndex, teeRating.slope, teeRating.rating, coursePar)
+    } else {
+        null
+    }
 
     // 正在修改的记录（null = 未打开编辑框）
     var editing by remember { mutableStateOf<RoundRecord?>(null) }
@@ -69,10 +82,21 @@ fun HistoryScreen(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 StatRow("轮次", "${rounds.size}")
+                StatRow("WHS 差点指数", whsIndex?.let { "%.1f".format(it) } ?: "—")
+                StatRow(
+                    "球场差点（${teeName(selectedTee)} T）",
+                    courseHandicap?.let { "$it" } ?: "—",
+                )
                 StatRow("简化差点", handicap?.let { "%.1f".format(it) } ?: "—")
                 StatRow("平均推杆", avgPutts?.let { "%.1f".format(it) } ?: "—")
                 StatRow("上果岭率", girRate?.let { "%.0f%%".format(it * 100) } ?: "—")
                 StatRow("上球道率", firRate?.let { "%.0f%%".format(it * 100) } ?: "—")
+                if (whsIndex == null && rounds.isNotEmpty()) {
+                    Text(
+                        "打满 3 轮（18 洞）后显示 WHS 差点指数；新球场需补 rating/slope。",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
             }
         }
 
