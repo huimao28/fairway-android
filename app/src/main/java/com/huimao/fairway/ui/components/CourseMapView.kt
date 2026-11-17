@@ -238,7 +238,7 @@ private fun addHoleLayers(style: Style) {
         LineLayer("putt-line", SRC_PUTT).withProperties(
             PropertyFactory.lineColor("#43A047"),
             PropertyFactory.lineWidth(3f),
-            PropertyFactory.lineDasharray(floatArrayOf(4f, 3f)),
+            PropertyFactory.lineDasharray(arrayOf(4f, 3f)),
             PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
         ),
     )
