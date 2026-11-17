@@ -51,22 +51,35 @@ class RoundViewModel(application: Application) : AndroidViewModel(application) {
     private val _savedMessage = MutableStateFlow<String?>(null)
     val savedMessage: StateFlow<String?> = _savedMessage.asStateFlow()
 
+    private val _loadError = MutableStateFlow<String?>(null)
+    val loadError: StateFlow<String?> = _loadError.asStateFlow()
+
     init {
         viewModelScope.launch {
-            val packs = repository.listPacks()
-            _packNames.value = packs
-            packs.firstOrNull()?.let { selectPack(it) }
+            try {
+                val packs = repository.listPacks()
+                _packNames.value = packs
+                packs.firstOrNull()?.let { selectPack(it) }
+            } catch (e: Exception) {
+                // 数据加载失败只显示错误，不让未捕获异常闪退
+                _loadError.value = "球场数据加载失败：${e.message}"
+            }
         }
     }
 
     fun selectPack(fileName: String) {
         viewModelScope.launch {
-            val pack = repository.loadPack(fileName)
-            _selectedPack.value = fileName
-            _course.value = pack.toCourse()
-            _currentHole.value = 1
-            _scores.value = emptyMap()
-            _shotOrigin.value = null
+            try {
+                val pack = repository.loadPack(fileName)
+                _selectedPack.value = fileName
+                _course.value = pack.toCourse()
+                _currentHole.value = 1
+                _scores.value = emptyMap()
+                _shotOrigin.value = null
+                _loadError.value = null
+            } catch (e: Exception) {
+                _loadError.value = "球场数据加载失败：${e.message}"
+            }
         }
     }
 

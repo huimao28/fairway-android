@@ -42,6 +42,7 @@ fun RoundScreen(
     modifier: Modifier = Modifier,
 ) {
     val course by viewModel.course.collectAsStateWithLifecycle()
+    val loadError by viewModel.loadError.collectAsStateWithLifecycle()
     val currentHole by viewModel.currentHole.collectAsStateWithLifecycle()
     val location by viewModel.location.collectAsStateWithLifecycle()
     val shotOrigin by viewModel.shotOrigin.collectAsStateWithLifecycle()
@@ -76,7 +77,10 @@ fun RoundScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(course?.name ?: "加载球场…", style = MaterialTheme.typography.titleLarge)
+        Text(
+            loadError ?: course?.name ?: "加载球场…",
+            style = MaterialTheme.typography.titleLarge,
+        )
 
         Row(
             verticalAlignment = Alignment.CenterVertically,

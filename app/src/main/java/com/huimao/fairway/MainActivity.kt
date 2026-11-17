@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -44,9 +45,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigationevent.NavigationEventInfo
-import androidx.navigationevent.compose.NavigationBackHandler
-import androidx.navigationevent.compose.rememberNavigationEventState
 import com.huimao.fairway.ui.RoundViewModel
 import com.huimao.fairway.ui.screens.HistoryScreen
 import com.huimao.fairway.ui.screens.RoundScreen
@@ -138,12 +136,9 @@ private fun FairwayApp() {
     }
 
     // 返回手势：不在打球页时先回打球页；打球页直接走系统返回（退出）
-    val navState = rememberNavigationEventState(currentInfo = NavigationEventInfo.None)
-    NavigationBackHandler(
-        state = navState,
-        isBackEnabled = tab != TAB_ROUND,
-        onBackCompleted = { tab = TAB_ROUND },
-    )
+    // 注：首版用 navigationevent-compose 1.0.0 的 NavigationBackHandler，真机启动闪退，
+    // 改回久经考验的 activity-compose BackHandler（行为一致）
+    BackHandler(enabled = tab != TAB_ROUND) { tab = TAB_ROUND }
 
     if (showRationale) {
         AlertDialog(
