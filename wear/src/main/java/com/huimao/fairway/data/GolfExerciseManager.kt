@@ -110,6 +110,9 @@ class GolfExerciseManager(context: Context) {
                 availability: Availability,
             ) {
             }
+
+            override fun onRegistered() {}
+            override fun onRegistrationFailed(throwable: Throwable) {}
         }
         exerciseClient.setUpdateCallback(callback!!)
         exerciseClient.startExercise(config)
