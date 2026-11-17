@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.huimao.fairway.data.CourseRepository
+import com.huimao.fairway.data.DownloadedCourseStore
 import com.huimao.fairway.data.HoleScore
 import com.huimao.fairway.data.HoleShot
 import com.huimao.fairway.data.RoundRecord
@@ -24,8 +25,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** 球场包条目：文件名 + 球场名（多球场切换用）。 */
-data class PackEntry(val fileName: String, val courseName: String)
+/** 球场包条目：文件名 + 球场名 + 是否下载的（多球场切换用）。 */
+data class PackEntry(val fileName: String, val courseName: String, val isDownloaded: Boolean = false)
 
 /** 发球台颜色中文名。 */
 fun teeName(color: String): String = when (color) {
@@ -86,12 +87,12 @@ class RoundViewModel(application: Application) : AndroidViewModel(application) {
     init {
         viewModelScope.launch {
             try {
-                val files = repository.listPacks()
-                _packs.value = files.map { file ->
-                    val pack = repository.loadPack(file)
-                    PackEntry(file, pack.course.name)
+                val refs = repository.listPacks()
+                _packs.value = refs.map { ref ->
+                    val pack = repository.loadPack(ref.fileName, ref.isDownloaded)
+                    PackEntry(ref.fileName, pack.course.name, ref.isDownloaded)
                 }
-                files.firstOrNull()?.let { selectPack(it) }
+                refs.firstOrNull()?.let { selectPack(it.fileName) }
             } catch (e: Exception) {
                 // 数据加载失败只显示错误，不让未捕获异常闪退
                 _loadError.value = "球场数据加载失败：${e.message}"
@@ -99,10 +100,37 @@ class RoundViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** 下载/删除球场后重新列出全部包（当前选中的包被删了就回退到第一个）。 */
+    fun refreshPacks() {
+        viewModelScope.launch {
+            try {
+                val refs = repository.listPacks()
+                _packs.value = refs.map { ref ->
+                    val pack = repository.loadPack(ref.fileName, ref.isDownloaded)
+                    PackEntry(ref.fileName, pack.course.name, ref.isDownloaded)
+                }
+                if (_selectedPack.value !in refs.map { it.fileName }) {
+                    refs.firstOrNull()?.let { selectPack(it.fileName) }
+                }
+            } catch (e: Exception) {
+                _loadError.value = "球场数据加载失败：${e.message}"
+            }
+        }
+    }
+
+    /** 删除一个下载的球场包（内置包不能删）。 */
+    fun deletePack(fileName: String) {
+        viewModelScope.launch {
+            DownloadedCourseStore(getApplication()).delete(fileName)
+            refreshPacks()
+        }
+    }
+
     fun selectPack(fileName: String) {
         viewModelScope.launch {
             try {
-                val pack = repository.loadPack(fileName)
+                val ref = _packs.value.find { it.fileName == fileName }
+                val pack = repository.loadPack(fileName, ref?.isDownloaded ?: false)
                 _selectedPack.value = fileName
                 _course.value = pack.toCourse()
                 _currentHole.value = 1

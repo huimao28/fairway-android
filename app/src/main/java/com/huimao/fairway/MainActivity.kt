@@ -25,6 +25,7 @@ import org.maplibre.android.MapLibre
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -53,7 +54,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.huimao.fairway.ui.CourseLibraryViewModel
 import com.huimao.fairway.ui.RoundViewModel
+import com.huimao.fairway.ui.screens.CourseLibraryScreen
 import com.huimao.fairway.ui.screens.HistoryScreen
 import com.huimao.fairway.ui.screens.RoundScreen
 import com.huimao.fairway.ui.screens.ScorecardScreen
@@ -77,6 +80,7 @@ class MainActivity : ComponentActivity() {
 private const val TAB_ROUND = 0
 private const val TAB_SCORECARD = 1
 private const val TAB_HISTORY = 2
+private const val TAB_LIBRARY = 3
 
 private val LOCATION_PERMISSIONS = arrayOf(
     Manifest.permission.ACCESS_FINE_LOCATION,
@@ -88,6 +92,7 @@ private fun FairwayApp() {
     val context = LocalContext.current
     val activity = context as Activity
     val viewModel: RoundViewModel = viewModel()
+    val libraryViewModel: CourseLibraryViewModel = viewModel()
     var tab by rememberSaveable { mutableIntStateOf(TAB_ROUND) }
     // 授权状态不缓存：每次现查
     var permissionGranted by remember { mutableStateOf(hasLocationPermission(context)) }
@@ -229,6 +234,12 @@ private fun FairwayApp() {
                     icon = { Icon(Icons.Default.Star, contentDescription = "成绩") },
                     label = { Text("成绩") },
                 )
+                NavigationBarItem(
+                    selected = tab == TAB_LIBRARY,
+                    onClick = { tab = TAB_LIBRARY },
+                    icon = { Icon(Icons.Default.Search, contentDescription = "球场") },
+                    label = { Text("球场") },
+                )
             }
         },
     ) { padding ->
@@ -241,6 +252,10 @@ private fun FairwayApp() {
                 )
                 TAB_SCORECARD -> ScorecardScreen(viewModel = viewModel)
                 TAB_HISTORY -> HistoryScreen(viewModel = viewModel)
+                TAB_LIBRARY -> CourseLibraryScreen(
+                    libraryViewModel = libraryViewModel,
+                    roundViewModel = viewModel,
+                )
             }
         }
     }

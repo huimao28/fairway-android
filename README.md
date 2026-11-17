@@ -30,6 +30,20 @@
 （18 洞全有 par/handicap；Tee 72 个；果岭 15 个带完整多边形；1/4/5/9 号洞缺果岭，
 先用洞线终点兜底）。
 
+## 在线球场库（第 4 个 tab“球场”）
+
+不用打包数据文件也能加球场：应用内直接调 OpenStreetMap 的接口。
+
+- 附近球场：Overpass 按当前位置 50 公里内找 `leisure=golf_course`
+- 按名搜索：Nominatim 按球场名搜（只保留 leisure=golf_course 的 way）
+- 下载：先拉球场轮廓算 bbox，再拉洞/Tee/果岭/沙坑/水障，**端上配对**成 CoursePack
+  （配对逻辑与当初 Python 提取桃花源的脚本一致：Tee 配洞线起点段、果岭配终点段，
+  有 `CoursePackBuilderTest` 用同一份原始数据回归校验）
+- 下过的球场存在应用内部存储 `files/courses/osm_<wayId>.json`，与内置包同一格式，
+  下次直接用；可以在球场库里删除
+- 限制：只支持标准 18 洞（ref 1..18）；OSM 上大多数球场只有轮廓、没有洞级数据，
+  那样的球场下载时会提示打不了；下载的球场没有 rating/slope，WHS 差点暂不显示
+
 ## 构建
 
 ```bash
