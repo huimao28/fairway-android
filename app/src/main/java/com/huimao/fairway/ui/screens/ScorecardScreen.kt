@@ -6,30 +6,24 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.huimao.fairway.data.HoleScore
 import com.huimao.fairway.domain.Hole
 import com.huimao.fairway.domain.Scoring
 import com.huimao.fairway.ui.RoundViewModel
+import com.huimao.fairway.ui.components.Stepper
+import com.huimao.fairway.ui.components.TriStateChip
+import com.huimao.fairway.ui.components.cycle
 
 @Composable
 fun ScorecardScreen(
@@ -133,58 +127,6 @@ private fun HoleScoreRow(
                     onUpdate { it.copy(gir = cycle(it.gir)) }
                 }
             }
-        }
-    }
-}
-
-/** null -> true -> false -> null 循环 */
-private fun cycle(v: Boolean?): Boolean? = when (v) {
-    null -> true
-    true -> false
-    false -> null
-}
-
-@Composable
-private fun TriStateChip(label: String, state: Boolean?, onToggle: () -> Unit) {
-    val text = when (state) {
-        true -> "$label ✓"
-        false -> "$label ✗"
-        null -> label
-    }
-    FilterChip(
-        selected = state == true,
-        onClick = onToggle,
-        label = { Text(text) },
-    )
-}
-
-@Composable
-private fun Stepper(label: String, value: Int, onChange: (Int) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.width(30.dp),
-        )
-        IconButton(
-            onClick = { onChange((value - 1).coerceAtLeast(0)) },
-            enabled = value > 0,
-            modifier = Modifier.size(36.dp),
-        ) {
-            // Remove 不在 material-icons-core 里，用文字减号（和加号对称）
-            Text("−", style = MaterialTheme.typography.titleMedium)
-        }
-        Text(
-            value.toString(),
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.width(24.dp),
-            textAlign = TextAlign.Center,
-        )
-        IconButton(
-            onClick = { onChange(value + 1) },
-            modifier = Modifier.size(36.dp),
-        ) {
-            Icon(Icons.Default.Add, contentDescription = "增加")
         }
     }
 }

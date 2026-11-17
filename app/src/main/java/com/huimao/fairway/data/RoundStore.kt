@@ -48,9 +48,28 @@ class RoundStore(context: Context) {
     }
 
     suspend fun saveRound(record: RoundRecord) {
+        rewrite {
+            removeAll { it.id == record.id }
+            add(record)
+        }
+    }
+
+    /** 修改一条已保存的记录（按 id 替换整条）。 */
+    suspend fun updateRound(record: RoundRecord) {
+        rewrite {
+            val idx = indexOfFirst { it.id == record.id }
+            if (idx >= 0) this[idx] = record else add(record)
+        }
+    }
+
+    /** 删除一条已保存的记录。 */
+    suspend fun deleteRound(id: Long) {
+        rewrite { removeAll { it.id == id } }
+    }
+
+    private suspend fun rewrite(transform: MutableList<RoundRecord>.() -> Unit) {
         val current = rounds.first().toMutableList()
-        current.removeAll { it.id == record.id }
-        current.add(record)
+        current.transform()
         current.sortByDescending { it.dateEpochMs }
         dataStore.edit { prefs ->
             prefs[roundsKey] = json.encodeToString(current)

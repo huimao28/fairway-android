@@ -21,7 +21,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -66,9 +65,6 @@ fun RoundScreen(
         val origin = shotOrigin
         if (loc != null && origin != null) Geo.haversineMeters(origin, loc) else null
     }
-    // 地图用的位置提供器：Draw 阶段读，不触发重组
-    val locationState = rememberUpdatedState(location)
-    val locationProvider = remember { { locationState.value } }
 
     Column(
         modifier = modifier
@@ -158,7 +154,7 @@ fun RoundScreen(
                 hole = it,
                 bunkers = course?.bunkers.orEmpty(),
                 waterHazards = course?.waterHazards.orEmpty(),
-                locationProvider = locationProvider,
+                playerLocation = location,
             )
         }
     }

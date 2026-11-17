@@ -1,127 +1,282 @@
 package com.huimao.fairway.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.huimao.fairway.domain.Hole
 import com.huimao.fairway.domain.LatLng
-import kotlin.math.cos
+import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.geometry.LatLng as MLGLatLng
+import org.maplibre.android.geometry.LatLngBounds
+import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.MapView
+import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
+import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.FillLayer
+import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.Property
+import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.geojson.Feature
+import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.LineString
+import org.maplibre.geojson.Point
+import org.maplibre.geojson.Polygon
 
-private fun teeColor(color: String): Color = when (color) {
-    "black" -> Color.Black
-    "blue" -> Color(0xFF1565C0)
-    "white" -> Color.White
-    "red" -> Color(0xFFE53935)
-    else -> Color.Gray
+private const val SRC_HOLE = "hole-line-src"
+private const val SRC_GREEN = "green-src"
+private const val SRC_TEE = "tee-src"
+private const val SRC_BUNKER = "bunker-src"
+private const val SRC_WATER = "water-src"
+private const val SRC_PLAYER = "player-src"
+
+private fun teeColorHex(color: String): String = when (color) {
+    "black" -> "#000000"
+    "blue" -> "#1565C0"
+    "white" -> "#FFFFFF"
+    "red" -> "#E53935"
+    else -> "#9E9E9E"
 }
 
 /**
- * 本洞示意图（Canvas 自绘，不接地图 SDK）。
- * 静态路径（洞线、果岭、Tee、沙坑、水障）缓存在 drawWithCache 里，只在尺寸变化时重建；
- * 玩家位置用 lambda 在 Draw 阶段读，不触发重组（GPS 高频更新也不重组整页）。
+ * 本洞地图：MapLibre + OSM 栅格底图（assets/map/osm-raster-style.json），
+ * 上叠洞线、果岭、Tee、沙坑、水障与玩家位置。无 API Key、无需 Google 服务，
+ * 瓦片走 tile.openstreetmap.org，国内可直连。
  */
 @Composable
 fun CourseMapView(
     hole: Hole,
     bunkers: List<LatLng>,
     waterHazards: List<LatLng>,
-    locationProvider: () -> LatLng?,
+    playerLocation: LatLng?,
     modifier: Modifier = Modifier,
 ) {
-    Box(
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var map by remember { mutableStateOf<MapLibreMap?>(null) }
+    var styleLoaded by remember { mutableStateOf(false) }
+
+    val mapView = remember { MapView(context).apply { onCreate(null) } }
+    var destroyed by remember { mutableStateOf(false) }
+    fun destroyOnce() {
+        if (!destroyed) {
+            destroyed = true
+            mapView.onDestroy()
+        }
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> mapView.onStart()
+                Lifecycle.Event.ON_RESUME -> mapView.onResume()
+                Lifecycle.Event.ON_PAUSE -> mapView.onPause()
+                Lifecycle.Event.ON_STOP -> mapView.onStop()
+                Lifecycle.Event.ON_DESTROY -> destroyOnce()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            destroyOnce()
+        }
+    }
+
+    // 洞/障碍变化 → 更新图层数据并移动镜头（样式加载后才生效）
+    LaunchedEffect(hole, bunkers, waterHazards, styleLoaded) {
+        val m = map ?: return@LaunchedEffect
+        if (!styleLoaded) return@LaunchedEffect
+        m.getStyle { style ->
+            updateHoleLayers(style, hole, bunkers, waterHazards)
+            fitHoleCamera(mapView, m, hole, bunkers, waterHazards)
+        }
+    }
+
+    // 玩家位置变化 → 只更新玩家图层
+    LaunchedEffect(playerLocation, styleLoaded) {
+        val m = map ?: return@LaunchedEffect
+        if (!styleLoaded) return@LaunchedEffect
+        m.getStyle { style ->
+            val src = style.getSourceAs<GeoJsonSource>(SRC_PLAYER) ?: return@getStyle
+            val loc = playerLocation
+            src.setGeoJson(
+                if (loc == null) FeatureCollection.fromFeatures(emptyList())
+                else Feature.fromGeometry(Point.fromLngLat(loc.lon, loc.lat)),
+            )
+        }
+    }
+
+    AndroidView(
+        factory = {
+            mapView.apply {
+                getMapAsync { m ->
+                    map = m
+                    m.setStyle(
+                        Style.Builder().fromUri("asset://map/osm-raster-style.json"),
+                        object : Style.OnStyleLoaded {
+                            override fun onStyleLoaded(style: Style) {
+                                addHoleLayers(style)
+                                styleLoaded = true
+                            }
+                        },
+                    )
+                }
+            }
+        },
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(1.2f)
-            .clip(RoundedCornerShape(24.dp))
-            .background(Color(0xFFE8F5E9))
-            .drawWithCache {
-                val allPoints = hole.poly +
-                    (hole.green?.poly.orEmpty()) +
-                    hole.tees.values + bunkers + waterHazards
-                if (allPoints.isEmpty()) {
-                    onDrawBehind { }
-                } else {
-                    val minLat = allPoints.minOf { it.lat }
-                    val maxLat = allPoints.maxOf { it.lat }
-                    val minLon = allPoints.minOf { it.lon }
-                    val maxLon = allPoints.maxOf { it.lon }
-                    val meanLat = Math.toRadians((minLat + maxLat) / 2)
-                    val earthR = 6_371_000.0
-                    fun toMeters(p: LatLng): Pair<Double, Double> {
-                        val x = Math.toRadians(p.lon - minLon) * cos(meanLat) * earthR
-                        val y = Math.toRadians(maxLat - p.lat) * earthR
-                        return x to y
-                    }
-                    val spanX = Math.toRadians(maxLon - minLon) * cos(meanLat) * earthR
-                    val spanY = Math.toRadians(maxLat - minLat) * earthR
-                    val pad = 48f
-                    val scale = minOf(
-                        (size.width - pad * 2) / spanX.toFloat().coerceAtLeast(1f),
-                        (size.height - pad * 2) / spanY.toFloat().coerceAtLeast(1f),
-                    )
-                    val offsetX = (size.width - spanX.toFloat() * scale) / 2
-                    val offsetY = (size.height - spanY.toFloat() * scale) / 2
-                    fun toOffset(p: LatLng): Offset {
-                        val (x, y) = toMeters(p)
-                        return Offset(offsetX + x.toFloat() * scale, offsetY + y.toFloat() * scale)
-                    }
+            .clip(RoundedCornerShape(24.dp)),
+    )
+}
 
-                    val holePath = Path().apply {
-                        hole.poly.forEachIndexed { i, p ->
-                            val o = toOffset(p)
-                            if (i == 0) moveTo(o.x, o.y) else lineTo(o.x, o.y)
-                        }
-                    }
-                    val greenPath = Path().apply {
-                        hole.green?.poly?.forEachIndexed { i, p ->
-                            val o = toOffset(p)
-                            if (i == 0) moveTo(o.x, o.y) else lineTo(o.x, o.y)
-                        }
-                        close()
-                    }
-                    val teeOffsets = hole.tees.map { (color, p) -> color to toOffset(p) }
-                    val bunkerOffsets = bunkers.map { toOffset(it) }
-                    val waterOffsets = waterHazards.map { toOffset(it) }
+private fun addHoleLayers(style: Style) {
+    style.addSource(GeoJsonSource(SRC_HOLE))
+    style.addSource(GeoJsonSource(SRC_GREEN))
+    style.addSource(GeoJsonSource(SRC_TEE))
+    style.addSource(GeoJsonSource(SRC_BUNKER))
+    style.addSource(GeoJsonSource(SRC_WATER))
+    style.addSource(GeoJsonSource(SRC_PLAYER))
 
-                    onDrawBehind {
-                        if (hole.green != null && hole.green.poly.isNotEmpty()) {
-                            drawPath(greenPath, Color(0xFF81C784))
-                        } else if (hole.green != null) {
-                            // 缺果岭兜底：只画中心点
-                            drawCircle(Color(0xFF81C784), radius = 18f, center = toOffset(hole.green.center))
-                        }
-                        drawPath(
-                            holePath,
-                            Color(0xFF2E7D32),
-                            style = Stroke(width = 10f, cap = StrokeCap.Round),
-                        )
-                        teeOffsets.forEach { (color, o) ->
-                            drawCircle(teeColor(color), radius = 13f, center = o)
-                            drawCircle(Color.White, radius = 13f, center = o, style = Stroke(width = 3f))
-                        }
-                        bunkerOffsets.forEach { drawCircle(Color(0xFFFFD54F), radius = 10f, center = it) }
-                        waterOffsets.forEach { drawCircle(Color(0xFF4FC3F7), radius = 10f, center = it) }
-                        // 玩家位置：Draw 阶段读 lambda，不触发重组
-                        val player = locationProvider()
-                        if (player != null) {
-                            val o = toOffset(player)
-                            drawCircle(Color.White, radius = 22f, center = o)
-                            drawCircle(Color(0xFF1565C0), radius = 15f, center = o)
-                        }
-                    }
+    // 图层按加入顺序叠放：果岭底 → 洞线 → 沙坑/水障 → Tee → 玩家
+    style.addLayer(
+        FillLayer("green-fill", SRC_GREEN).withProperties(
+            PropertyFactory.fillColor("#81C784"),
+            PropertyFactory.fillOpacity(0.85f),
+        ),
+    )
+    // 缺果岭兜底洞：果岭只是个点，画圆
+    style.addLayer(
+        CircleLayer("green-point", SRC_GREEN).withProperties(
+            PropertyFactory.circleRadius(9f),
+            PropertyFactory.circleColor("#81C784"),
+        ),
+    )
+    style.addLayer(
+        LineLayer("hole-line", SRC_HOLE).withProperties(
+            PropertyFactory.lineColor("#2E7D32"),
+            PropertyFactory.lineWidth(4f),
+            PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+            PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+        ),
+    )
+    style.addLayer(
+        CircleLayer("bunkers", SRC_BUNKER).withProperties(
+            PropertyFactory.circleRadius(6f),
+            PropertyFactory.circleColor("#FFD54F"),
+        ),
+    )
+    style.addLayer(
+        CircleLayer("water", SRC_WATER).withProperties(
+            PropertyFactory.circleRadius(6f),
+            PropertyFactory.circleColor("#4FC3F7"),
+        ),
+    )
+    style.addLayer(
+        CircleLayer("tees", SRC_TEE).withProperties(
+            PropertyFactory.circleRadius(7f),
+            PropertyFactory.circleColor(Expression.toColor(Expression.get("color"))),
+            PropertyFactory.circleStrokeWidth(2f),
+            PropertyFactory.circleStrokeColor("#FFFFFF"),
+        ),
+    )
+    style.addLayer(
+        CircleLayer("player-halo", SRC_PLAYER).withProperties(
+            PropertyFactory.circleRadius(11f),
+            PropertyFactory.circleColor("#FFFFFF"),
+        ),
+    )
+    style.addLayer(
+        CircleLayer("player-dot", SRC_PLAYER).withProperties(
+            PropertyFactory.circleRadius(7f),
+            PropertyFactory.circleColor("#1565C0"),
+        ),
+    )
+}
+
+private fun updateHoleLayers(
+    style: Style,
+    hole: Hole,
+    bunkers: List<LatLng>,
+    waterHazards: List<LatLng>,
+) {
+    style.getSourceAs<GeoJsonSource>(SRC_HOLE)?.setGeoJson(
+        if (hole.poly.size >= 2) {
+            Feature.fromGeometry(
+                LineString.fromLngLats(hole.poly.map { Point.fromLngLat(it.lon, it.lat) }),
+            )
+        } else {
+            FeatureCollection.fromFeatures(emptyList())
+        },
+    )
+    style.getSourceAs<GeoJsonSource>(SRC_GREEN)?.setGeoJson(
+        when {
+            hole.green?.poly?.isNotEmpty() == true -> {
+                val poly = hole.green.poly
+                val ring = poly.map { Point.fromLngLat(it.lon, it.lat) } +
+                    Point.fromLngLat(poly.first().lon, poly.first().lat)
+                Feature.fromGeometry(Polygon.fromLngLats(listOf(ring)))
+            }
+            hole.green != null -> Feature.fromGeometry(
+                Point.fromLngLat(hole.green.center.lon, hole.green.center.lat),
+            )
+            else -> FeatureCollection.fromFeatures(emptyList())
+        },
+    )
+    style.getSourceAs<GeoJsonSource>(SRC_TEE)?.setGeoJson(
+        FeatureCollection.fromFeatures(
+            hole.tees.map { (color, p) ->
+                Feature.fromGeometry(Point.fromLngLat(p.lon, p.lat)).apply {
+                    addStringProperty("color", teeColorHex(color))
                 }
             },
+        ),
     )
+    style.getSourceAs<GeoJsonSource>(SRC_BUNKER)?.setGeoJson(
+        FeatureCollection.fromFeatures(
+            bunkers.map { Feature.fromGeometry(Point.fromLngLat(it.lon, it.lat)) },
+        ),
+    )
+    style.getSourceAs<GeoJsonSource>(SRC_WATER)?.setGeoJson(
+        FeatureCollection.fromFeatures(
+            waterHazards.map { Feature.fromGeometry(Point.fromLngLat(it.lon, it.lat)) },
+        ),
+    )
+}
+
+private fun fitHoleCamera(
+    mapView: MapView,
+    map: MapLibreMap,
+    hole: Hole,
+    bunkers: List<LatLng>,
+    waterHazards: List<LatLng>,
+) {
+    val points = hole.poly + (hole.green?.poly.orEmpty()) + hole.tees.values + bunkers + waterHazards
+    if (points.isEmpty()) return
+    val bounds = LatLngBounds.Builder().apply {
+        points.forEach { include(MLGLatLng(it.lat, it.lon)) }
+    }.build()
+    // 等布局完成后再算镜头，否则 newLatLngBounds 会因尺寸为 0 报错
+    mapView.post {
+        runCatching {
+            map.easeCamera(CameraUpdateFactory.newLatLngBounds(bounds, 80), 600)
+        }
+    }
 }

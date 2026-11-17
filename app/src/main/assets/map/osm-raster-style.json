@@ -1,0 +1,1 @@
+{"layers":[{"id":"osm","maxzoom":19,"minzoom":0,"source":"osm","type":"raster"}],"name":"OSM Raster","sources":{"osm":{"attribution":"© OpenStreetMap contributors","tileSize":256,"tiles":["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],"type":"raster"}},"version":8}

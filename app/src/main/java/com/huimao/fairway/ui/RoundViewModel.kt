@@ -131,4 +131,14 @@ class RoundViewModel(application: Application) : AndroidViewModel(application) {
     fun consumeSavedMessage() {
         _savedMessage.value = null
     }
+
+    /** 修改一条已保存的记录。 */
+    fun updateRound(record: RoundRecord) {
+        viewModelScope.launch { roundStore.updateRound(record) }
+    }
+
+    /** 删除一条已保存的记录。 */
+    fun deleteRound(id: Long) {
+        viewModelScope.launch { roundStore.deleteRound(id) }
+    }
 }

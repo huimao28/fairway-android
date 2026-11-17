@@ -55,6 +55,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.play.services.location)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.maplibre.android.sdk)
 
     implementation(libs.kotlinx.serialization.json)
 
