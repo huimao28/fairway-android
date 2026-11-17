@@ -1,5 +1,8 @@
 package com.huimao.fairway.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,9 +22,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.huimao.fairway.data.CourseSearchResult
@@ -32,7 +40,7 @@ import com.huimao.fairway.ui.RoundViewModel
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-/** 球场库：国内球场离线搜（OpenStreetMap POI 名单），搜不到时自动在线搜；下载到本地后在打球页切换。 */
+/** 球场库：先查 GolfCore（国内外都优先），没有再走离线 POI 名单，最后在线兜底；下载到本地后在打球页切换。 */
 @Composable
 fun CourseLibraryScreen(
     libraryViewModel: CourseLibraryViewModel,
@@ -46,9 +54,11 @@ fun CourseLibraryScreen(
     val downloadProgress by libraryViewModel.downloadProgress.collectAsStateWithLifecycle()
     val downloadStage by libraryViewModel.downloadStage.collectAsStateWithLifecycle()
     val message by libraryViewModel.message.collectAsStateWithLifecycle()
+    val golfCoreKey by libraryViewModel.golfCoreKey.collectAsStateWithLifecycle()
     val packs by roundViewModel.packs.collectAsStateWithLifecycle()
     val location by roundViewModel.location.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     val downloaded = packs.filter { it.isDownloaded }
     val downloadedIds = downloaded.mapNotNull {
@@ -66,9 +76,12 @@ fun CourseLibraryScreen(
         }
         item {
             Text(
-                "国内球场离线搜：名单来自 OpenStreetMap（2026-11-17，362 个球场，含港澳台），" +
-                    "搜名字或附近都不用联网；名单里没有的会自动在线搜索。下载仍需联网，" +
-                    "下过的球场存手机里。多数球场只有轮廓、没有洞数据——那样的下载时会提示打不了。",
+                "搜球场先查 GolfCore（国内外都优先，中国 408 家，带城市、国家和中文原名），" +
+                    "没有再走离线名单（OpenStreetMap，2026-11-17，362 个球场，含港澳台；" +
+                    "没网时也靠它），最后才走 Nominatim / Overpass 在线搜。下载仍需联网，" +
+                    "下过的球场存手机里；GolfCore 的球场下载时按坐标找 OSM 上的球场轮廓，" +
+                    "下载完还会补 rating/slope（有的话，WHS 差点就能算）。多数球场只有轮廓、" +
+                    "没有洞数据——那样的下载时会提示打不了。",
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
@@ -132,20 +145,27 @@ fun CourseLibraryScreen(
             }
             items(
                 items = results,
-                key = { it.osmId },
+                key = { it.resultKey() },
                 contentType = { "result" },
             ) { result ->
                 SearchResultRow(
                     result = result,
                     location = location,
                     isDownloaded = result.osmId in downloadedIds,
-                    isDownloading = downloadingId == result.osmId,
+                    isDownloading = downloadingId == result.resultKey(),
                     progress = downloadProgress,
                     stage = downloadStage,
                     onDownload = {
                         scope.launch {
                             val file = libraryViewModel.download(result)
                             if (file != null) roundViewModel.refreshPacks()
+                        }
+                    },
+                    onOpenGolfCore = { url ->
+                        runCatching {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                        }.onFailure {
+                            libraryViewModel.setMessage("打不开 GolfCore 球场页。")
                         }
                     },
                 )
@@ -179,6 +199,19 @@ fun CourseLibraryScreen(
                 }
             }
         }
+        item {
+            GolfCoreKeySection(
+                savedKeyTail = golfCoreKey?.takeLast(4),
+                onSave = { libraryViewModel.saveGolfCoreKey(it) },
+                onClear = { libraryViewModel.clearGolfCoreKey() },
+            )
+        }
+        item {
+            Text(
+                "国外球场搜索与 rating 数据由 GolfCore 提供（golfcore.org）。",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
         if (results.isEmpty() && downloaded.isEmpty()) {
             item {
                 Text(
@@ -199,6 +232,7 @@ private fun SearchResultRow(
     progress: Float?,
     stage: String?,
     onDownload: () -> Unit,
+    onOpenGolfCore: (String) -> Unit,
 ) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         if (isDownloading) {
@@ -208,7 +242,7 @@ private fun SearchResultRow(
                     .fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                ResultTexts(result = result, location = location)
+                ResultTexts(result = result, location = location, onOpenGolfCore = onOpenGolfCore)
                 LinearProgressIndicator(
                     progress = progress ?: 0f,
                     modifier = Modifier.fillMaxWidth(),
@@ -230,6 +264,7 @@ private fun SearchResultRow(
                     result = result,
                     location = location,
                     modifier = Modifier.weight(1f),
+                    onOpenGolfCore = onOpenGolfCore,
                 )
                 when {
                     isDownloaded -> Text("已下载", style = MaterialTheme.typography.bodyMedium)
@@ -240,15 +275,94 @@ private fun SearchResultRow(
     }
 }
 
-/** 搜索结果的文字部分：名 + “国家 · 城市”（离线 POI 才有）+ 距离。 */
+/** GolfCore key 设置：每人用自己的免费 key（platform.golfcore.app 注册，免卡），只存本机。 */
+@Composable
+private fun GolfCoreKeySection(
+    savedKeyTail: String?,
+    onSave: (String) -> Unit,
+    onClear: () -> Unit,
+) {
+    var input by remember { mutableStateOf("") }
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("GolfCore key", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "国外搜索与 rating 补全走 GolfCore 免费档（每月 500 次）。2026 年 12 月 4 日前" +
+                    "不填 key 也能用，之后必须带 key；key 不能共用，每人在 platform.golfcore.app " +
+                    "免费注册一个（不用绑卡），填在这里，只存本机。",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            if (savedKeyTail != null) {
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("已保存（尾号 $savedKeyTail）", style = MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick = onClear) { Text("清除") }
+                }
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = { input = it },
+                    label = { Text("粘贴 GolfCore key") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.weight(1f),
+                )
+                Button(
+                    onClick = {
+                        if (input.isNotBlank()) {
+                            onSave(input)
+                            input = ""
+                        }
+                    },
+                    enabled = input.isNotBlank(),
+                ) {
+                    Text("保存")
+                }
+            }
+        }
+    }
+}
+
+/** 搜索结果的文字部分：名（GolfCore 的结果带可点的署名）+ “国家 · 城市” + 距离。 */
 @Composable
 private fun ResultTexts(
     result: CourseSearchResult,
     location: LatLng?,
     modifier: Modifier = Modifier,
+    onOpenGolfCore: (String) -> Unit,
 ) {
     Column(modifier = modifier) {
-        Text(result.name, style = MaterialTheme.typography.titleMedium)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                result.name,
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            val url = result.golfCoreUrl
+            if (result.golfCoreSlug != null && url != null) {
+                Text(
+                    "GolfCore ↗",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.clickable { onOpenGolfCore(url) },
+                )
+            }
+        }
         val place = listOfNotNull(
             result.country.takeIf { it.isNotBlank() },
             result.city.takeIf { it.isNotBlank() },

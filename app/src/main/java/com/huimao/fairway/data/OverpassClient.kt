@@ -50,7 +50,14 @@ data class CourseSearchResult(
     val lon: Double,
     val city: String = "",
     val country: String = "",
-)
+    /** GolfCore 搜到的结果才有（osmId 为 0，下载时按坐标找 OSM way 桥接）。 */
+    val golfCoreSlug: String? = null,
+    /** GolfCore 球场页链接（署名用，点开看原页）。 */
+    val golfCoreUrl: String? = null,
+) {
+    /** 列表 key / 下载中的行标识：GolfCore 结果按 slug，OSM 结果按 way id。 */
+    fun resultKey(): String = golfCoreSlug?.let { "gc:$it" } ?: "osm:$osmId"
+}
 
 /** 下载一个球场的结果。 */
 sealed interface CourseDownload {
@@ -121,6 +128,21 @@ class OverpassClient {
                     conn.disconnect()
                 }
             }.getOrElse { emptyList() }
+        }
+
+    /**
+     * 按坐标找最近的 OSM 球场 way（GolfCore 搜到的球场下载时桥接用：GolfCore
+     * 只给经纬度，没有 OSM id）。2 公里内没有带名的 way 返回 null。
+     */
+    suspend fun resolveCourseWay(lat: Double, lon: Double): Long? =
+        withContext(Dispatchers.IO) {
+            val query = """
+                [out:json][timeout:30];
+                way["leisure"="golf_course"](around:2000,$lat,$lon);
+                out center;
+            """.trimIndent()
+            val resp = postOverpass(query, readTimeoutMs = 45_000) ?: return@withContext null
+            pickNearestCourseWay(resp.elements, lat, lon)
         }
 
     /**
