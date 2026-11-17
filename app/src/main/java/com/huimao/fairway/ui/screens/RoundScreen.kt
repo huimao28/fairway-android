@@ -9,8 +9,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
@@ -84,14 +84,14 @@ fun RoundScreen(
             modifier = Modifier.fillMaxWidth(),
         ) {
             IconButton(onClick = { viewModel.prevHole() }, enabled = currentHole > 1) {
-                Icon(Icons.Default.ChevronLeft, contentDescription = "上一洞")
+                Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "上一洞")
             }
             Text(
                 text = hole?.let { "第 ${it.ref} 洞 · Par ${it.par} · 差点 ${it.handicap}" } ?: "—",
                 style = MaterialTheme.typography.titleMedium,
             )
             IconButton(onClick = { viewModel.nextHole() }, enabled = currentHole < 18) {
-                Icon(Icons.Default.ChevronRight, contentDescription = "下一洞")
+                Icon(Icons.Default.KeyboardArrowRight, contentDescription = "下一洞")
             }
         }
 

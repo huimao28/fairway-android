@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilterChip
@@ -172,7 +171,8 @@ private fun Stepper(label: String, value: Int, onChange: (Int) -> Unit) {
             enabled = value > 0,
             modifier = Modifier.size(36.dp),
         ) {
-            Icon(Icons.Default.Remove, contentDescription = "减少")
+            // Remove 不在 material-icons-core 里，用文字减号（和加号对称）
+            Text("−", style = MaterialTheme.typography.titleMedium)
         }
         Text(
             value.toString(),

@@ -1,11 +1,14 @@
 package com.huimao.fairway.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
 private val LightColors = lightColorScheme(
     primary = Color(0xFF1E6B34),
@@ -49,14 +52,29 @@ private val DarkColors = darkColorScheme(
     error = Color(0xFFFFB4AB),
 )
 
-/** Material 3 Expressive 主题（果岭绿主色）。 */
+/** Expressive 圆角（大圆角是 M3 Expressive 的视觉特征）。 */
+private val ExpressiveShapes = Shapes(
+    extraSmall = RoundedCornerShape(12.dp),
+    small = RoundedCornerShape(16.dp),
+    medium = RoundedCornerShape(24.dp),
+    large = RoundedCornerShape(32.dp),
+    extraLarge = RoundedCornerShape(48.dp),
+)
+
+/**
+ * Material 3 Expressive 主题（果岭绿主色）。
+ * 注意：BOM 2025.04.01 的 material3 1.3.1 里 MaterialExpressiveTheme 还是 internal，
+ * 所以用 MaterialTheme + Expressive 圆角实现同样的视觉效果；以后升 BOM 到
+ * 2026.09.00（material3 1.4.0）后可直接换回 MaterialExpressiveTheme。
+ */
 @Composable
 fun FairwayTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    MaterialExpressiveTheme(
+    MaterialTheme(
         colorScheme = if (darkTheme) DarkColors else LightColors,
+        shapes = ExpressiveShapes,
         content = content,
     )
 }
