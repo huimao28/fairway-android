@@ -32,10 +32,17 @@
 
 ## 在线球场库（第 4 个 tab“球场”）
 
-不用打包数据文件也能加球场：应用内直接调 OpenStreetMap 的接口。
+国内球场**离线搜**（不用联网），搜不到时自动走在线搜索（国外球场用）。
 
-- 附近球场：Overpass 按当前位置 50 公里内找 `leisure=golf_course`
-- 按名搜索：Nominatim 按球场名搜（只保留 leisure=golf_course 的 way）
+- 国内名单：`assets/poi/china-courses.json`，来自 OpenStreetMap（2026-11-17 提取，
+  CN + TW + MO 三个 area 合并，362 个球场，含港澳台），已去掉练习场/训练场/学院/
+  迷你等打不了的条目；OSM 上只有英文名的球场（如桃花源）补了已核实的中文别名，
+  `aliases` 字段只放已核实的，不编造。刷新名单：重新跑 Overpass area 查询并按
+  同一规则清洗后替换该文件，同时替换 `src/test/resources/poi/` 里的同一份拷贝
+  （`ChinaCoursePoiTest` 会校验条数、桃花源别名与屏蔽词）。
+- 按名搜索：先查离线名单（中文名/别名优先、英文名次之，全等 > 前缀 > 包含），
+  没有再走 Nominatim 在线搜
+- 附近球场：先查离线名单 50 公里内按距离排序，没有再走 Overpass 在线找
 - 下载：先拉球场轮廓算 bbox，再拉洞/Tee/果岭/沙坑/水障，**端上配对**成 CoursePack
   （配对逻辑与当初 Python 提取桃花源的脚本一致：Tee 配洞线起点段、果岭配终点段，
   有 `CoursePackBuilderTest` 用同一份原始数据回归校验）

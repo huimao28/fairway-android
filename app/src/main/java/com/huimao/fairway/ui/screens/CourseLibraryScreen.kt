@@ -31,7 +31,7 @@ import com.huimao.fairway.ui.RoundViewModel
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-/** 球场库：在线找球场（OpenStreetMap），下载到本地后在打球页切换。 */
+/** 球场库：国内球场离线搜（OpenStreetMap POI 名单），搜不到时自动在线搜；下载到本地后在打球页切换。 */
 @Composable
 fun CourseLibraryScreen(
     libraryViewModel: CourseLibraryViewModel,
@@ -63,8 +63,9 @@ fun CourseLibraryScreen(
         }
         item {
             Text(
-                "在线找球场：数据来自 OpenStreetMap，下过的球场存手机里，下次直接用。" +
-                    "全球大多数球场只有轮廓、没有洞数据——那样的球场下载时会提示打不了。",
+                "国内球场离线搜：名单来自 OpenStreetMap（2026-11-17，362 个球场，含港澳台），" +
+                    "搜名字或附近都不用联网；名单里没有的会自动在线搜索。下载仍需联网，" +
+                    "下过的球场存手机里。多数球场只有轮廓、没有洞数据——那样的下载时会提示打不了。",
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
