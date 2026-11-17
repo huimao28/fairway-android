@@ -116,9 +116,13 @@ fun CourseMapView(
         m.getStyle { style ->
             val src = style.getSourceAs<GeoJsonSource>(SRC_PLAYER) ?: return@getStyle
             val loc = playerLocation
+            // setGeoJson 的重载按具体类型解析：if/else 两分支类型不同会推成公共父类而解析失败，
+            // 所以统一包成 FeatureCollection 再传
             src.setGeoJson(
-                if (loc == null) FeatureCollection.fromFeatures(emptyList())
-                else Feature.fromGeometry(Point.fromLngLat(loc.lon, loc.lat)),
+                FeatureCollection.fromFeatures(
+                    if (loc == null) emptyList()
+                    else listOf(Feature.fromGeometry(Point.fromLngLat(loc.lon, loc.lat))),
+                ),
             )
         }
     }
@@ -218,27 +222,35 @@ private fun updateHoleLayers(
     waterHazards: List<LatLng>,
 ) {
     style.getSourceAs<GeoJsonSource>(SRC_HOLE)?.setGeoJson(
-        if (hole.poly.size >= 2) {
-            Feature.fromGeometry(
-                LineString.fromLngLats(hole.poly.map { Point.fromLngLat(it.lon, it.lat) }),
-            )
-        } else {
-            FeatureCollection.fromFeatures(emptyList())
-        },
+        FeatureCollection.fromFeatures(
+            if (hole.poly.size >= 2) {
+                listOf(
+                    Feature.fromGeometry(
+                        LineString.fromLngLats(hole.poly.map { Point.fromLngLat(it.lon, it.lat) }),
+                    ),
+                )
+            } else {
+                emptyList()
+            },
+        ),
     )
     style.getSourceAs<GeoJsonSource>(SRC_GREEN)?.setGeoJson(
-        when {
-            hole.green?.poly?.isNotEmpty() == true -> {
-                val poly = hole.green.poly
-                val ring = poly.map { Point.fromLngLat(it.lon, it.lat) } +
-                    Point.fromLngLat(poly.first().lon, poly.first().lat)
-                Feature.fromGeometry(Polygon.fromLngLats(listOf(ring)))
-            }
-            hole.green != null -> Feature.fromGeometry(
-                Point.fromLngLat(hole.green.center.lon, hole.green.center.lat),
-            )
-            else -> FeatureCollection.fromFeatures(emptyList())
-        },
+        FeatureCollection.fromFeatures(
+            when {
+                hole.green?.poly?.isNotEmpty() == true -> {
+                    val poly = hole.green.poly
+                    val ring = poly.map { Point.fromLngLat(it.lon, it.lat) } +
+                        Point.fromLngLat(poly.first().lon, poly.first().lat)
+                    listOf(Feature.fromGeometry(Polygon.fromLngLats(listOf(ring))))
+                }
+                hole.green != null -> listOf(
+                    Feature.fromGeometry(
+                        Point.fromLngLat(hole.green.center.lon, hole.green.center.lat),
+                    ),
+                )
+                else -> emptyList()
+            },
+        ),
     )
     style.getSourceAs<GeoJsonSource>(SRC_TEE)?.setGeoJson(
         FeatureCollection.fromFeatures(

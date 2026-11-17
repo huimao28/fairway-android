@@ -12,7 +12,7 @@
 ## 设计与技术
 
 - 设计：Material You 3 Expressive
-- 技术：Kotlin + Compose，v1 不接地图 SDK（GPS 坐标 + 距离公式测距）
+- 技术：Kotlin + Compose；地图用 MapLibre + OSM 栅格底图（无 Key，洞线/果岭/Tee/沙坑/水障叠加显示）
 - 开发按 Google 官方 android/skills（Compose 性能、权限安全、返回手势）
 
 ## 球场数据（通用可插拔）
