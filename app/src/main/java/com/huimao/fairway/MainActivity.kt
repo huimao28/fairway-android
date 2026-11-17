@@ -25,6 +25,7 @@ import org.maplibre.android.MapLibre
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
@@ -56,10 +57,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.huimao.fairway.ui.CourseLibraryViewModel
 import com.huimao.fairway.ui.RoundViewModel
+import com.huimao.fairway.ui.SwingViewModel
 import com.huimao.fairway.ui.screens.CourseLibraryScreen
 import com.huimao.fairway.ui.screens.HistoryScreen
 import com.huimao.fairway.ui.screens.RoundScreen
 import com.huimao.fairway.ui.screens.ScorecardScreen
+import com.huimao.fairway.ui.screens.SwingScreen
 import com.huimao.fairway.ui.theme.FairwayTheme
 
 class MainActivity : ComponentActivity() {
@@ -81,6 +84,7 @@ private const val TAB_ROUND = 0
 private const val TAB_SCORECARD = 1
 private const val TAB_HISTORY = 2
 private const val TAB_LIBRARY = 3
+private const val TAB_SWING = 4
 
 private val LOCATION_PERMISSIONS = arrayOf(
     Manifest.permission.ACCESS_FINE_LOCATION,
@@ -93,6 +97,7 @@ private fun FairwayApp() {
     val activity = context as Activity
     val viewModel: RoundViewModel = viewModel()
     val libraryViewModel: CourseLibraryViewModel = viewModel()
+    val swingViewModel: SwingViewModel = viewModel()
     var tab by rememberSaveable { mutableIntStateOf(TAB_ROUND) }
     // 授权状态不缓存：每次现查
     var permissionGranted by remember { mutableStateOf(hasLocationPermission(context)) }
@@ -240,6 +245,12 @@ private fun FairwayApp() {
                     icon = { Icon(Icons.Default.Search, contentDescription = "球场") },
                     label = { Text("球场") },
                 )
+                NavigationBarItem(
+                    selected = tab == TAB_SWING,
+                    onClick = { tab = TAB_SWING },
+                    icon = { Icon(Icons.Default.PlayArrow, contentDescription = "挥杆") },
+                    label = { Text("挥杆") },
+                )
             }
         },
     ) { padding ->
@@ -256,6 +267,7 @@ private fun FairwayApp() {
                     libraryViewModel = libraryViewModel,
                     roundViewModel = viewModel,
                 )
+                TAB_SWING -> SwingScreen(viewModel = swingViewModel)
             }
         }
     }

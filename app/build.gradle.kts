@@ -58,6 +58,8 @@ dependencies {
     implementation(libs.maplibre.android.sdk)
 
     implementation(libs.kotlinx.serialization.json)
+    // 挥杆视频分析：ML Kit 姿态检测（base 版，beta；端上免费离线）
+    implementation(libs.mlkit.pose.detection)
 
     testImplementation(libs.junit)
 }
