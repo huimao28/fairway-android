@@ -2,6 +2,8 @@ package com.huimao.fairway
 
 import android.Manifest
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -15,6 +17,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import com.huimao.fairway.CrashReporter
+import org.maplibre.android.MapLibre
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
@@ -54,6 +60,10 @@ import com.huimao.fairway.ui.theme.FairwayTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // MapLibre 要求先初始化单例，否则 MapView 构造时直接抛
+        // MapLibreConfigurationException 闪退（13.7.1 源码 MapView.initialize 已核实）
+        MapLibre.getInstance(this)
+        CrashReporter.install(this)
         setContent {
             FairwayTheme {
                 FairwayApp()
@@ -133,6 +143,38 @@ private fun FairwayApp() {
             snackbarHostState.showSnackbar(it)
             viewModel.consumeSavedMessage()
         }
+    }
+
+    // 上次闪退的堆栈（有则弹窗显示，截图或复制发来就能定位）
+    val crashText = remember { CrashReporter.readLastCrash(context) }
+    var showCrash by remember { mutableStateOf(crashText != null) }
+    if (showCrash && crashText != null) {
+        AlertDialog(
+            onDismissRequest = { showCrash = false },
+            title = { Text("上次启动闪退了") },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(crashText, style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val clipboard =
+                        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(
+                        ClipData.newPlainText("灰猫球道闪退日志", crashText),
+                    )
+                    CrashReporter.clear(context)
+                    showCrash = false
+                }) { Text("复制日志") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    CrashReporter.clear(context)
+                    showCrash = false
+                }) { Text("关闭") }
+            },
+        )
     }
 
     // 返回手势：不在打球页时先回打球页；打球页直接走系统返回（退出）
