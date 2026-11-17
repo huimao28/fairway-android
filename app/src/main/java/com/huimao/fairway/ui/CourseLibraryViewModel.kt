@@ -37,6 +37,14 @@ class CourseLibraryViewModel(application: Application) : AndroidViewModel(applic
     private val _downloadingId = MutableStateFlow<Long?>(null)
     val downloadingId: StateFlow<Long?> = _downloadingId.asStateFlow()
 
+    /** 下载进度 0..1（null = 没有在下载的），只在阶段切换时更新。 */
+    private val _downloadProgress = MutableStateFlow<Float?>(null)
+    val downloadProgress: StateFlow<Float?> = _downloadProgress.asStateFlow()
+
+    /** 下载当前阶段文案（null = 没有在下载的）。 */
+    private val _downloadStage = MutableStateFlow<String?>(null)
+    val downloadStage: StateFlow<String?> = _downloadStage.asStateFlow()
+
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
@@ -106,9 +114,9 @@ class CourseLibraryViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
-    /** POI 转搜索结果：有已核实的中文别名时优先显示中文名。 */
+    /** POI 转搜索结果：有已核实的中文别名时优先显示中文名；城市/国家一并带上。 */
     private fun com.huimao.fairway.data.CoursePoi.toSearchResult(): CourseSearchResult =
-        CourseSearchResult(osmId, aliases.firstOrNull() ?: name, lat, lon)
+        CourseSearchResult(osmId, aliases.firstOrNull() ?: name, lat, lon, city, country)
 
     /**
      * 下载一个球场并存到本地。成功返回文件名（调用方刷新球场列表）；
@@ -116,9 +124,14 @@ class CourseLibraryViewModel(application: Application) : AndroidViewModel(applic
      */
     suspend fun download(result: CourseSearchResult): String? {
         _downloadingId.value = result.osmId
+        _downloadProgress.value = 0f
+        _downloadStage.value = "正在拉取球场轮廓…"
         _message.value = null
         return try {
-            when (val r = overpass.downloadCourse(result.osmId)) {
+            when (val r = overpass.downloadCourse(result.osmId) { progress, stage ->
+                _downloadProgress.value = progress
+                _downloadStage.value = stage
+            }) {
                 is CourseDownload.Ok -> {
                     val fileName = store.save(r.pack)
                     _message.value = "已下载「${r.pack.course.name}」，去打球页就能用。"
@@ -139,6 +152,8 @@ class CourseLibraryViewModel(application: Application) : AndroidViewModel(applic
             }
         } finally {
             _downloadingId.value = null
+            _downloadProgress.value = null
+            _downloadStage.value = null
         }
     }
 }

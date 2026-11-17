@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -42,6 +43,8 @@ fun CourseLibraryScreen(
     val searching by libraryViewModel.searching.collectAsStateWithLifecycle()
     val results by libraryViewModel.results.collectAsStateWithLifecycle()
     val downloadingId by libraryViewModel.downloadingId.collectAsStateWithLifecycle()
+    val downloadProgress by libraryViewModel.downloadProgress.collectAsStateWithLifecycle()
+    val downloadStage by libraryViewModel.downloadStage.collectAsStateWithLifecycle()
     val message by libraryViewModel.message.collectAsStateWithLifecycle()
     val packs by roundViewModel.packs.collectAsStateWithLifecycle()
     val location by roundViewModel.location.collectAsStateWithLifecycle()
@@ -137,6 +140,8 @@ fun CourseLibraryScreen(
                     location = location,
                     isDownloaded = result.osmId in downloadedIds,
                     isDownloading = downloadingId == result.osmId,
+                    progress = downloadProgress,
+                    stage = downloadStage,
                     onDownload = {
                         scope.launch {
                             val file = libraryViewModel.download(result)
@@ -191,32 +196,73 @@ private fun SearchResultRow(
     location: LatLng?,
     isDownloaded: Boolean,
     isDownloading: Boolean,
+    progress: Float?,
+    stage: String?,
     onDownload: () -> Unit,
 ) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(result.name, style = MaterialTheme.typography.titleMedium)
-                val dist = location?.let {
-                    val km = Geo.haversineMeters(it, LatLng(result.lat, result.lon)) / 1000.0
-                    if (km < 1.0) "${(km * 1000).roundToInt()} 米" else "${km.roundToInt()} 公里"
-                }
+        if (isDownloading) {
+            Column(
+                Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ResultTexts(result = result, location = location)
+                LinearProgressIndicator(
+                    progress = progress ?: 0f,
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 Text(
-                    dist ?: "距离未知（未定位）",
+                    stage ?: "正在下载…",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
-            when {
-                isDownloading -> CircularProgressIndicator()
-                isDownloaded -> Text("已下载", style = MaterialTheme.typography.bodyMedium)
-                else -> Button(onClick = onDownload) { Text("下载") }
+        } else {
+            Row(
+                Modifier
+                    .padding(16.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ResultTexts(
+                    result = result,
+                    location = location,
+                    modifier = Modifier.weight(1f),
+                )
+                when {
+                    isDownloaded -> Text("已下载", style = MaterialTheme.typography.bodyMedium)
+                    else -> Button(onClick = onDownload) { Text("下载") }
+                }
             }
         }
+    }
+}
+
+/** 搜索结果的文字部分：名 + “国家 · 城市”（离线 POI 才有）+ 距离。 */
+@Composable
+private fun ResultTexts(
+    result: CourseSearchResult,
+    location: LatLng?,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        Text(result.name, style = MaterialTheme.typography.titleMedium)
+        val place = listOfNotNull(
+            result.country.takeIf { it.isNotBlank() },
+            result.city.takeIf { it.isNotBlank() },
+        ).joinToString(" · ")
+        if (place.isNotBlank()) {
+            Text(place, style = MaterialTheme.typography.bodyMedium)
+        }
+        val dist = location?.let {
+            val km = Geo.haversineMeters(it, LatLng(result.lat, result.lon)) / 1000.0
+            if (km < 1.0) "${(km * 1000).roundToInt()} 米" else "${km.roundToInt()} 公里"
+        }
+        Text(
+            dist ?: "距离未知（未定位）",
+            style = MaterialTheme.typography.bodyMedium,
+        )
     }
 }

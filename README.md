@@ -40,12 +40,17 @@
   `aliases` 字段只放已核实的，不编造。刷新名单：重新跑 Overpass area 查询并按
   同一规则清洗后替换该文件，同时替换 `src/test/resources/poi/` 里的同一份拷贝
   （`ChinaCoursePoiTest` 会校验条数、桃花源别名与屏蔽词）。
+- 搜索结果每行显示“国家 · 城市”（如“中国 · 常德”）：`city`/`country` 字段是
+  提取时用 Nominatim 逆地理编码一次算好、随名单打包的，运行时不联网；
+  在线搜到的球场没有这两个字段，只显示距离
 - 按名搜索：先查离线名单（中文名/别名优先、英文名次之，全等 > 前缀 > 包含），
   没有再走 Nominatim 在线搜
 - 附近球场：先查离线名单 50 公里内按距离排序，没有再走 Overpass 在线找
 - 下载：先拉球场轮廓算 bbox，再拉洞/Tee/果岭/沙坑/水障，**端上配对**成 CoursePack
   （配对逻辑与当初 Python 提取桃花源的脚本一致：Tee 配洞线起点段、果岭配终点段，
-  有 `CoursePackBuilderTest` 用同一份原始数据回归校验）
+  有 `CoursePackBuilderTest` 用同一份原始数据回归校验）；下载时该行显示
+  LinearProgressIndicator 阶段进度条（拉轮廓 → 拉洞数据 → 配对 → 保存，
+  只在阶段切换时更新，不假装连续）
 - 下过的球场存在应用内部存储 `files/courses/osm_<wayId>.json`，与内置包同一格式，
   下次直接用；可以在球场库里删除
 - 限制：只支持标准 18 洞（ref 1..18）；OSM 上大多数球场只有轮廓、没有洞级数据，

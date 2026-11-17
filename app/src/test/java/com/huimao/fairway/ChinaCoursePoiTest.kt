@@ -98,6 +98,12 @@ class ChinaCoursePoiTest {
         val th = pois.singleOrNull { it.osmId == 1552111008L }
             ?: error("POI 里没有桃花源（osm 1552111008）")
         assertTrue("桃花源要有中文别名", th.aliases.any { "桃花源" in it })
+        // 逆地理编码补的城市/国家：桃花源必须是中国·常德
+        assertEquals("中国", th.country)
+        assertEquals("常德", th.city)
+        // 允许个别逆地理编码失败，但九成以上要有城市和国家
+        val withPlace = pois.count { it.city.isNotBlank() && it.country.isNotBlank() }
+        assertTrue("九成以上应有城市/国家，实际 $withPlace/${pois.size}", withPlace * 10 >= pois.size * 9)
 
         val blocked = listOf(
             "练习", "練習", "训练", "訓練", "迷你", "学院", "學院",

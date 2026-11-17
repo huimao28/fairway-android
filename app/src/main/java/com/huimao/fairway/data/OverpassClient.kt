@@ -42,12 +42,14 @@ data class NominatimPlace(
     val type: String = "",
 )
 
-/** 球场搜索结果：OSM way id + 名 + 中心点。 */
+/** 球场搜索结果：OSM way id + 名 + 中心点；city/country 只有离线 POI 结果才有（在线结果为空）。 */
 data class CourseSearchResult(
     val osmId: Long,
     val name: String,
     val lat: Double,
     val lon: Double,
+    val city: String = "",
+    val country: String = "",
 )
 
 /** 下载一个球场的结果。 */
@@ -121,8 +123,16 @@ class OverpassClient {
             }.getOrElse { emptyList() }
         }
 
-    /** 下载一个球场：先拉轮廓算 bbox，再拉洞/Tee/果岭/沙坑/水障，端上配对成 CoursePack。 */
-    suspend fun downloadCourse(osmId: Long): CourseDownload = withContext(Dispatchers.IO) {
+    /**
+     * 下载一个球场：先拉轮廓算 bbox，再拉洞/Tee/果岭/沙坑/水障，端上配对成 CoursePack。
+     * onProgress 在阶段切换时回调（进度 0..1 + 阶段文案），供界面画进度条；
+     * 两次联网调用之间没有更细的进度，所以按阶段跳进，不假装连续。
+     */
+    suspend fun downloadCourse(
+        osmId: Long,
+        onProgress: ((Float, String) -> Unit)? = null,
+    ): CourseDownload = withContext(Dispatchers.IO) {
+        onProgress?.invoke(0.05f, "正在拉取球场轮廓…")
         // 第一步：球场轮廓（算 bbox）
         val outlineQuery = """
             [out:json][timeout:30];
@@ -139,6 +149,7 @@ class OverpassClient {
         val maxLon = outline.geometry.maxOf { it.lon } + 0.005
         val bbox = "$minLat,$minLon,$maxLat,$maxLon"
 
+        onProgress?.invoke(0.2f, "正在拉取洞数据…")
         // 第二步：洞级数据（只拉 way；Tee/果岭/沙坑/水障在 OSM 上都是 way）
         val detailQuery = """
             [out:json][timeout:60];
@@ -157,8 +168,10 @@ class OverpassClient {
         if (detail.elements.none { it.type == "way" && it.tags["golf"] == "hole" }) {
             return@withContext CourseDownload.NoHoleData
         }
+        onProgress?.invoke(0.65f, "正在配对洞数据…")
         val pack = CoursePackBuilder.build(outline, detail)
             ?: return@withContext CourseDownload.Not18Holes
+        onProgress?.invoke(0.85f, "正在保存…")
         CourseDownload.Ok(pack)
     }
 

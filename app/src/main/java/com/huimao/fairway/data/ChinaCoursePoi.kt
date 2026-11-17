@@ -24,6 +24,9 @@ data class CoursePoi(
     val aliases: List<String> = emptyList(),
     val lat: Double,
     val lon: Double,
+    /** 逆地理编码补的城市/国家（Nominatim，提取时一次算好）；拿不到时为空，界面自动隐藏该行。 */
+    val city: String = "",
+    val country: String = "",
 )
 
 /**
