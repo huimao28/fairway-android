@@ -31,6 +31,14 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        // 必须与上面 Java 的 17 一致，否则 Kotlin 默认跟 JDK 走（CI 是 JDK 21）会报
+        // "Inconsistent JVM Target Compatibility Between Java and Kotlin Tasks"
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
 dependencies {
     val bom = libs.androidx.compose.bom
     implementation(platform(bom))
