@@ -143,6 +143,7 @@ private fun FairwayApp() {
             if (event == Lifecycle.Event.ON_RESUME) {
                 permissionGranted = hasLocationPermission(context)
                 if (permissionGranted) viewModel.startTracking() else viewModel.stopTracking()
+                viewModel.refreshWatchConnection()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)

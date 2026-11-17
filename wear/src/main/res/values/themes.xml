@@ -1,0 +1,6 @@
+<resources>
+    <!-- 手表端用 Wear Compose M3 的 MaterialTheme 管颜色/字号，XML 主题只要无标题栏 + 黑底 -->
+    <style name="Theme.FairwayWear" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>

@@ -7,12 +7,17 @@ import com.huimao.fairway.data.CourseRepository
 import com.huimao.fairway.data.DownloadedCourseStore
 import com.huimao.fairway.data.HoleScore
 import com.huimao.fairway.data.HoleShot
+import com.huimao.fairway.data.RoundPushState
 import com.huimao.fairway.data.RoundRecord
 import com.huimao.fairway.data.RoundStore
 import com.huimao.fairway.data.TeeRating
+import com.huimao.fairway.data.WearRoundSync
+import com.huimao.fairway.data.WearSync
 import com.huimao.fairway.data.WeatherNow
 import com.huimao.fairway.data.WeatherRepository
+import com.huimao.fairway.data.WorkoutSummary
 import com.huimao.fairway.domain.Course
+import com.huimao.fairway.domain.Geo
 import com.huimao.fairway.domain.Hole
 import com.huimao.fairway.domain.LatLng
 import com.huimao.fairway.domain.Whs
@@ -24,6 +29,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /** 球场包条目：文件名 + 球场名 + 是否下载的（多球场切换用）。 */
 data class PackEntry(val fileName: String, val courseName: String, val isDownloaded: Boolean = false)
@@ -44,6 +50,7 @@ class RoundViewModel(application: Application) : AndroidViewModel(application) {
     private val roundStore = RoundStore(application)
     private val tracker = LocationTracker(application)
     private val weatherRepository = WeatherRepository()
+    private val wearSync = WearRoundSync(application)
 
     val location: StateFlow<LatLng?> = tracker.location
 
@@ -84,6 +91,16 @@ class RoundViewModel(application: Application) : AndroidViewModel(application) {
     private val _loadError = MutableStateFlow<String?>(null)
     val loadError: StateFlow<String?> = _loadError.asStateFlow()
 
+    /** 手表是否连接（打球页显示“手表已连接/未连接”）。 */
+    private val _watchConnected = MutableStateFlow(false)
+    val watchConnected: StateFlow<Boolean> = _watchConnected.asStateFlow()
+
+    /** 手表发来的运动汇总（本轮还没保存，先暂存，保存时写进 RoundRecord）。 */
+    private val _pendingWorkout = MutableStateFlow<WorkoutSummary?>(null)
+
+    /** 手表推送节流：位置更新最多 5 秒推一次，切洞/改杆立即推。 */
+    private var lastWearPushMs = 0L
+
     init {
         viewModelScope.launch {
             try {
@@ -97,6 +114,62 @@ class RoundViewModel(application: Application) : AndroidViewModel(application) {
                 // 数据加载失败只显示错误，不让未捕获异常闪退
                 _loadError.value = "球场数据加载失败：${e.message}"
             }
+        }
+        // 手表发来的记分：写回当轮成绩（putts = -1 表示手表没改，保留原值）
+        viewModelScope.launch {
+            WearSync.scoreUpdates.collect { u ->
+                updateScore(u.hole) {
+                    it.copy(strokes = u.strokes, putts = if (u.putts >= 0) u.putts else it.putts)
+                }
+            }
+        }
+        // 手表发来的切洞请求
+        viewModelScope.launch {
+            WearSync.holeRequests.collect { setCurrentHole(it) }
+        }
+        // 手表发来的运动汇总：先暂存，保存本轮时写进成绩
+        viewModelScope.launch {
+            WearSync.workoutSummaries.collect { _pendingWorkout.value = it }
+        }
+        // 位置变化时推手表（节流 5 秒；切洞/改杆走立即推）
+        viewModelScope.launch {
+            location.collect { pushRoundToWatch() }
+        }
+    }
+
+    /** 查手表是否连接（回到前台时调一次）。 */
+    fun refreshWatchConnection() {
+        viewModelScope.launch {
+            _watchConnected.value = wearSync.isWatchConnected()
+        }
+    }
+
+    /** 把当前洞状态推给手表（距离是手机算好的；没球场/没定位时距离记 -1）。 */
+    private fun pushRoundToWatch(force: Boolean = false) {
+        val course = _course.value ?: return
+        val now = System.currentTimeMillis()
+        if (!force && now - lastWearPushMs < 5_000) return
+        lastWearPushMs = now
+        val loc = location.value
+        val hole = course.holes.find { it.ref == _currentHole.value }
+        val (front, mid, back) = if (loc != null && hole?.green != null) {
+            Geo.greenDistances(loc, hole.green).let {
+                Triple(it.first.roundToInt(), it.second.roundToInt(), it.third.roundToInt())
+            }
+        } else {
+            Triple(-1, -1, -1)
+        }
+        val state = RoundPushState(
+            courseName = course.name,
+            hole = _currentHole.value,
+            par = hole?.par ?: 0,
+            distFront = front,
+            distMid = mid,
+            distBack = back,
+            strokes = _scores.value[_currentHole.value]?.strokes ?: 0,
+        )
+        viewModelScope.launch {
+            runCatching { wearSync.pushRound(state) }
         }
     }
 
@@ -145,6 +218,8 @@ class RoundViewModel(application: Application) : AndroidViewModel(application) {
                 _selectedTee.value = if ("white" in tees) "white" else tees.firstOrNull() ?: "white"
                 // 天气（失败就留空，UI 不显示天气卡）
                 _weather.value = weatherRepository.load(pack.course.lat, pack.course.lon)
+                // 切球场后手表立即同步新球场第一洞
+                pushRoundToWatch(force = true)
             } catch (e: Exception) {
                 _loadError.value = "球场数据加载失败：${e.message}"
             }
@@ -157,6 +232,7 @@ class RoundViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setCurrentHole(n: Int) {
         _currentHole.value = n.coerceIn(1, 18)
+        pushRoundToWatch(force = true)
     }
 
     fun nextHole() = setCurrentHole(_currentHole.value + 1)
@@ -166,6 +242,7 @@ class RoundViewModel(application: Application) : AndroidViewModel(application) {
     fun updateScore(hole: Int, transform: (HoleScore) -> HoleScore) {
         val current = _scores.value[hole] ?: HoleScore(hole = hole)
         _scores.value = _scores.value + (hole to transform(current))
+        pushRoundToWatch(force = true)
     }
 
     /** 在当前位置标记击球点：追加到本洞轨迹，上一杆距离从这里算起。 */
@@ -251,8 +328,10 @@ class RoundViewModel(application: Application) : AndroidViewModel(application) {
                         course.totalPar,
                     ),
                     shots = shotList,
+                    workout = _pendingWorkout.value,
                 ),
             )
+            _pendingWorkout.value = null
             _savedMessage.value = "已保存本轮成绩"
         }
     }

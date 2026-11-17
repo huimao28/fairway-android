@@ -102,6 +102,34 @@ Nominatim / Overpass 在线搜。
   挥杆平面只能拿肩和手腕轨迹近似。拍摄要求：侧面或正后方、拍全身、光线够、
   不遮挡；正面拍效果最差
 
+## Wear OS 联动（:wear 模块，Pixel Watch 3）
+
+- 结构：同一仓库里的 `:wear` 模块，Wear Compose Material3 1.6.2（不要 1.7.x，
+  要 compileSdk 37 + AGP 9.1），minSdk 30（Wear OS 3+），与手机端同包名
+  `com.huimao.fairway`（Play 靠包名关联）；手表 UI 按官方 wear-compose-m3
+  skill：AppScaffold + ScreenScaffold、TransformingLazyColumn，不用 Horologist
+  的 Composables
+- 手表镜像：手机算距离、手表显示 + 记分。手机端 `RoundViewModel` 状态变化
+  （切洞、位置更新、改杆）时经 Data Layer（`/fairway/round`，setUrgent）
+  推当前洞状态（球场名、洞号、par、前/中/后沿距离、杆数）；手表改杆数、
+  下一洞经 MessageClient（`/fairway/score`、`/fairway/hole`）发回手机，
+  `FairwayWearListenerService` 收后写回当轮成绩。打球页显示“手表已连接/未连接”
+  （NodeClient 查）。手表端 v1 不要定位权限
+- 手表运动记录：Health Services ExerciseClient（`health-services-client:1.1.0`），
+  ExerciseType.GOLF，不开 GPS。手表上开始/结束（跟着一轮走），前台服务
+  （foregroundServiceType="health"）跑；实时看心率、已打时间、步数、卡路里
+  （先 getCapabilities 查手表实际支持什么，只订阅支持的）；打完汇总
+  （时长、平均/最高心率、卡路里、步数）经 `/fairway/workout` 发回手机，
+  存进当轮 RoundRecord 的 `workout` 字段。权限：Pixel Watch 3（Wear OS 5）
+  上是 BODY_SENSORS + ACTIVITY_RECOGNITION，走三态流程。1.1.0 新加的
+  GolfShotEvent（自动识别挥杆/击球）v1 不接，以后做自动计杆用
+- 交付：推 `v*` tag 走 `.github/workflows/release.yml` 发 Pre-release，
+  手机 + 手表两个 debug APK 当附件（release 构建没签名装不上，所以挂 debug 包）。
+  手表 APK 走 adb Wi-Fi 装：`adb connect <手表IP>:5555` 再
+  `adb -s <手表IP>:5555 install wear-debug.apk`；手机 APK 正常装
+- 限制：手表须连手机（蓝牙），手机不在身边时只显示最后同步的状态；
+  手表无独立 GPS，距离由手机算好推过来；运动记录无 GPS 轨迹
+
 ## 构建
 
 ```bash

@@ -31,6 +31,16 @@ data class HoleShot(
     val lon: Double,
 )
 
+/** 手表高尔夫运动记录汇总（Health Services ExerciseType.GOLF；旧成绩没有就是 null）。 */
+@Serializable
+data class WorkoutSummary(
+    val durationMs: Long,
+    val avgHr: Double = 0.0,
+    val maxHr: Int = 0,
+    val calories: Double = 0.0,
+    val steps: Long = 0L,
+)
+
 @Serializable
 data class RoundRecord(
     val id: Long,
@@ -46,6 +56,8 @@ data class RoundRecord(
     val differential: Double? = null,
     /** 击球轨迹：每洞的击球点（按顺序） */
     val shots: List<HoleShot> = emptyList(),
+    /** 手表运动记录汇总（本轮在手表上记了运动才有；老记录为 null） */
+    val workout: WorkoutSummary? = null,
 )
 
 private val Context.roundsDataStore: DataStore<Preferences> by preferencesDataStore(name = "rounds")

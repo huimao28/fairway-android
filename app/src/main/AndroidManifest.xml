@@ -24,5 +24,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- 手表联动：收手表发来的记分/切洞/运动汇总（系统经 BIND_LISTENER 绑定；只收 /fairway 前缀的消息） -->
+        <service
+            android:name=".data.FairwayWearListenerService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.BIND_LISTENER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/fairway" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

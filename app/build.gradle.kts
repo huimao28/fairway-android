@@ -13,7 +13,7 @@ android {
         applicationId = "com.huimao.fairway"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
+        versionCode = 2
         versionName = "1.0.0"
     }
 
@@ -60,6 +60,8 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     // 挥杆视频分析：ML Kit 姿态检测（base 版，beta；端上免费离线）
     implementation(libs.mlkit.pose.detection)
+    // 手表联动：Wear OS Data Layer（DataClient / MessageClient / NodeClient）
+    implementation(libs.play.services.wearable)
 
     testImplementation(libs.junit)
 }

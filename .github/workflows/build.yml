@@ -34,12 +34,12 @@ jobs:
       - name: Run unit tests
         run: |
           set -o pipefail
-          ./gradlew :app:testDebugUnitTest --console=plain 2>&1 | tee test.log
+          ./gradlew :app:testDebugUnitTest :wear:testDebugUnitTest --console=plain 2>&1 | tee test.log
 
-      - name: Build debug APK
+      - name: Build debug APKs
         run: |
           set -o pipefail
-          ./gradlew :app:assembleDebug --console=plain 2>&1 | tee build.log
+          ./gradlew :app:assembleDebug :wear:assembleDebug --console=plain 2>&1 | tee build.log
 
       - name: Surface Kotlin errors as annotations
         if: failure()
@@ -58,3 +58,9 @@ jobs:
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/*.apk
+
+      - name: Upload watch APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: wear-debug
+          path: wear/build/outputs/apk/debug/*.apk

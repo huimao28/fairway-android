@@ -72,6 +72,7 @@ fun RoundScreen(
     val shotOrigin by viewModel.shotOrigin.collectAsStateWithLifecycle()
     val shotsMap by viewModel.shots.collectAsStateWithLifecycle()
     val weather by viewModel.weather.collectAsStateWithLifecycle()
+    val watchConnected by viewModel.watchConnected.collectAsStateWithLifecycle()
 
     val hole = course?.holes?.find { it.ref == currentHole }
     val availableTees = remember(course) {
@@ -224,6 +225,7 @@ fun RoundScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text("到果岭", style = MaterialTheme.typography.titleMedium)
+                DistanceRow("手表", if (watchConnected) "已连接" else "未连接")
                 DistanceRow("前沿", formatMeters(greenDist?.first))
                 DistanceRow("中", formatMeters(greenDist?.second))
                 DistanceRow("后沿", formatMeters(greenDist?.third))

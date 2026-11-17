@@ -11,6 +11,11 @@ datastore-preferences = "1.1.1"
 maplibre = "13.7.1"
 junit = "4.13.2"
 mlkit-pose-detection = "18.0.0-beta5"
+wear-compose-material3 = "1.6.2"
+wear-compose-foundation = "1.6.2"
+wear-compose-ui-tooling = "1.6.2"
+play-services-wearable = "20.0.1"
+health-services-client = "1.1.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "core-ktx" }
@@ -28,6 +33,11 @@ androidx-datastore-preferences = { group = "androidx.datastore", name = "datasto
 maplibre-android-sdk = { group = "org.maplibre.gl", name = "android-sdk", version.ref = "maplibre" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
 mlkit-pose-detection = { group = "com.google.mlkit", name = "pose-detection", version.ref = "mlkit-pose-detection" }
+wear-compose-material3 = { group = "androidx.wear.compose", name = "compose-material3", version.ref = "wear-compose-material3" }
+wear-compose-foundation = { group = "androidx.wear.compose", name = "compose-foundation", version.ref = "wear-compose-foundation" }
+wear-compose-ui-tooling = { group = "androidx.wear.compose", name = "compose-ui-tooling", version.ref = "wear-compose-ui-tooling" }
+play-services-wearable = { group = "com.google.android.gms", name = "play-services-wearable", version.ref = "play-services-wearable" }
+health-services-client = { group = "androidx.health", name = "health-services-client", version.ref = "health-services-client" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]

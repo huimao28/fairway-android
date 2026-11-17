@@ -14,3 +14,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "fairway-android"
 include(":app")
+include(":wear")
