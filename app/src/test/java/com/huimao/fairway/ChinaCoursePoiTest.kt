@@ -50,8 +50,8 @@ class ChinaCoursePoiTest {
         assertEquals(2, poiMatchScore(taohuayuan, "taohuayuan"))
         // 中文名前缀 → 1 分
         assertEquals(1, poiMatchScore(beijing, "北京"))
-        // 只有英文名能命中时走英文通道 → 3 分
-        assertEquals(3, poiMatchScore(shanghaiLinks, "links"))
+        // 只有英文名能命中时走英文通道：英文包含 = 3 + 2 = 5 分
+        assertEquals(5, poiMatchScore(shanghaiLinks, "links"))
         // 不匹配与空查询返回 null
         assertNull(poiMatchScore(beijing, "上海"))
         assertNull(poiMatchScore(beijing, "  "))
