@@ -5,7 +5,6 @@ import com.google.android.gms.tasks.Task
 import com.google.android.gms.wearable.DataMap
 import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.suspendCancellableCoroutine
-import java.util.concurrent.Executor
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -58,19 +57,3 @@ suspend fun sendWorkoutSummary(context: Context, summary: WorkoutSummary): Boole
     }.toByteArray()
     return sendMessage(context, WearPaths.WORKOUT, payload)
 }
-
-/** 供 awaitTask 外部复用：ListenableFuture 转挂起函数（Health Services 用）。 */
-internal suspend fun <T> com.google.common.util.concurrent.ListenableFuture<T>.awaitFuture(): T =
-    suspendCancellableCoroutine { cont ->
-        addListener(
-            {
-                try {
-                    if (cont.isActive) cont.resume(get())
-                } catch (e: Exception) {
-                    if (cont.isActive) cont.resumeWithException(e)
-                }
-            },
-            Executor { it.run() },
-        )
-        cont.invokeOnCancellation { cancel(true) }
-    }

@@ -8,7 +8,10 @@ import androidx.health.services.client.data.ExerciseConfig
 import androidx.health.services.client.data.ExerciseLapSummary
 import androidx.health.services.client.data.ExerciseType
 import androidx.health.services.client.data.ExerciseUpdate
-import androidx.health.services.client.data.ExerciseUpdateCallback
+import androidx.health.services.client.ExerciseUpdateCallback
+import androidx.health.services.client.endExercise
+import androidx.health.services.client.getCapabilities
+import androidx.health.services.client.startExercise
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -80,7 +83,7 @@ class GolfExerciseManager(context: Context) {
     /** 开始记录。系统里同时只能有一个运动在跑，被别的运动顶掉时会抛异常，调用方提示用户。 */
     suspend fun start(): Result<Unit> = runCatching {
         val supported = runCatching {
-            val caps = exerciseClient.getCapabilitiesAsync().awaitFuture()
+            val caps = exerciseClient.getCapabilities()
             caps.getExerciseTypeCapabilities(ExerciseType.GOLF).supportedDataTypes
         }.getOrDefault(emptySet())
         val requested = setOfNotNull(

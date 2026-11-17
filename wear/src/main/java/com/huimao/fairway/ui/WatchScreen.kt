@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberOverscrollEffect
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -28,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -38,7 +38,9 @@ import androidx.wear.compose.foundation.AmbientMode
 import androidx.wear.compose.foundation.LocalAmbientModeManager
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
-import androidx.wear.compose.foundation.onRotaryScrollEvent
+import androidx.wear.compose.foundation.requestFocusOnHierarchyActive
+import androidx.wear.compose.foundation.rotary.RotaryScrollableBehavior
+import androidx.wear.compose.foundation.rotary.rotaryScrollable
 import androidx.wear.compose.material3.AlertDialog
 import androidx.wear.compose.material3.AlertDialogDefaults
 import androidx.wear.compose.material3.AppScaffold
@@ -58,6 +60,7 @@ import androidx.wear.compose.material3.lazy.transformedHeight
 import androidx.wear.compose.ui.tooling.preview.WearPreviewDevices
 import com.huimao.fairway.data.RoundMirror
 import com.huimao.fairway.data.WorkoutState
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 
 /** 运动记录要的权限（心率 + 步数/卡路里）。Pixel Watch 3（Wear OS 5）上就是这两个。 */
@@ -106,6 +109,23 @@ fun WatchScreen(viewModel: WatchViewModel) {
 
     var showRationale by remember { mutableStateOf(false) }
     var permanentlyDenied by remember { mutableStateOf(false) }
+
+    // 表冠转杆数：1.6.2 已无 onRotaryScrollEvent，用自定义 RotaryScrollableBehavior。
+    // 顺时针转＋1、逆时针－1；读 viewModel.strokes.value 实时值，不缓存旧值。
+    val stepperFocusRequester = remember { FocusRequester() }
+    val strokesRotaryBehavior = remember {
+        object : RotaryScrollableBehavior {
+            override suspend fun CoroutineScope.performScroll(
+                timestampMillis: Long,
+                delta: Float,
+                inputDeviceId: Int,
+                orientation: Orientation,
+            ) {
+                val current = viewModel.strokes.value
+                if (delta > 0) viewModel.setStrokes(current + 1) else viewModel.setStrokes(current - 1)
+            }
+        }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -231,18 +251,25 @@ fun WatchScreen(viewModel: WatchViewModel) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .transformedHeight(this, transformationSpec),
+                                .transformedHeight(this, transformationSpec)
+                                .requestFocusOnHierarchyActive()
+                                .rotaryScrollable(
+                                    behavior = strokesRotaryBehavior,
+                                    focusRequester = stepperFocusRequester,
+                                ),
                         ) {
                             Stepper(
                                 value = strokes,
                                 onValueChange = { viewModel.setStrokes(it) },
                                 valueProgression = 0..12,
                                 decreaseIcon = {
-                                    Icon(
-                                        Icons.Default.Remove,
-                                        contentDescription = "减一杆",
+                                    // Remove 在 material-icons-extended 里，不引整个扩展包，用文字减号
+                                    Box(
                                         modifier = Modifier.size(StepperDefaults.IconSize),
-                                    )
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text("−", style = MaterialTheme.typography.titleLarge)
+                                    }
                                 },
                                 increaseIcon = {
                                     Icon(
@@ -250,14 +277,6 @@ fun WatchScreen(viewModel: WatchViewModel) {
                                         contentDescription = "加一杆",
                                         modifier = Modifier.size(StepperDefaults.IconSize),
                                     )
-                                },
-                                modifier = Modifier.onRotaryScrollEvent { event ->
-                                    if (event.verticalScrollPixels > 0) {
-                                        viewModel.setStrokes(strokes + 1)
-                                    } else {
-                                        viewModel.setStrokes(strokes - 1)
-                                    }
-                                    true
                                 },
                             ) {
                                 Text("$strokes 杆", style = MaterialTheme.typography.titleLarge)
